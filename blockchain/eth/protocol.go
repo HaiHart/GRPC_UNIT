@@ -1,0 +1,89 @@
+package eth
+
+import (
+	"context"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	log "github.com/massbitprotocol/turbo/logger"
+	"time"
+)
+
+// SupportedProtocols is the list of all Ethereum protocols supported by this client
+var SupportedProtocols = []uint{eth.ETH66, eth.ETH65}
+
+// MakeProtocols generates the set of supported protocols structs for p2p server
+func MakeProtocols(ctx context.Context, backend Backend) []p2p.Protocol {
+	protocols := make([]p2p.Protocol, 0, len(SupportedProtocols))
+	for _, version := range SupportedProtocols {
+		protocols = append(protocols, makeProtocol(ctx, backend, version))
+	}
+	return protocols
+}
+
+func makeProtocol(ctx context.Context, backend Backend, version uint) p2p.Protocol {
+	return p2p.Protocol{
+		Name:    "eth",
+		Version: version,
+		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+			ep := NewPeer(ctx, p, rw, version)
+
+			config := backend.NetworkConfig()
+			peerStatus, err := ep.Handshake(uint32(version), config.Network, config.TotalDifficulty, config.Head, config.Genesis)
+			if err != nil {
+				return err
+			}
+
+			// process status message on backend to set initial total difficulty
+			_ = backend.Handle(ep, peerStatus)
+
+			return backend.RunPeer(ep, func(peer *Peer) error {
+				for {
+					if err = handleMessage(backend, ep); err != nil {
+						return err
+					}
+				}
+			})
+		},
+		NodeInfo: func() interface{} {
+			return nil
+		},
+		PeerInfo: func(id enode.ID) interface{} {
+			return nil
+		},
+	}
+}
+
+type msgHandler func(backend Backend, msg Decoder, peer *Peer) error
+
+// Decoder represents any struct that can be decoded into an Ethereum message type
+type Decoder interface {
+	Decode(val interface{}) error
+}
+
+var eth65 = map[uint64]msgHandler{}
+
+var eth66 = map[uint64]msgHandler{}
+
+func handleMessage(backend Backend, peer *Peer) error {
+	msg, err := peer.rw.ReadMsg()
+	if err != nil {
+		return err
+	}
+
+	startTime := time.Now()
+	defer func() {
+		_ = msg.Discard()
+		log.Tracef("%v: handling message with code: %v took %v", peer, msg.Code, time.Since(startTime))
+	}()
+
+	handlers := eth65
+	if peer.version >= eth.ETH66 {
+		handlers = eth66
+	}
+	handler, ok := handlers[msg.Code]
+	if ok {
+		return handler(backend, msg, peer)
+	}
+	return nil
+}
