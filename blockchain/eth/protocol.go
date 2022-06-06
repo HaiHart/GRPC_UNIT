@@ -10,7 +10,7 @@ import (
 )
 
 // SupportedProtocols is the list of all Ethereum protocols supported by this client
-var SupportedProtocols = []uint{eth.ETH66, eth.ETH65}
+var SupportedProtocols = []uint{eth.ETH65, eth.ETH66}
 
 // MakeProtocols generates the set of supported protocols structs for p2p server
 func MakeProtocols(ctx context.Context, backend Backend) []p2p.Protocol {
@@ -61,9 +61,40 @@ type Decoder interface {
 	Decode(val interface{}) error
 }
 
-var eth65 = map[uint64]msgHandler{}
+var eth65 = map[uint64]msgHandler{
+	eth.GetBlockHeadersMsg:            handleGetBlockHeaders,
+	eth.BlockHeadersMsg:               handleBlockHeaders,
+	eth.GetBlockBodiesMsg:             handleGetBlockBodies,
+	eth.BlockBodiesMsg:                handleBlockBodies,
+	eth.GetNodeDataMsg:                handleUnimplemented,
+	eth.NodeDataMsg:                   handleUnimplemented,
+	eth.GetReceiptsMsg:                handleUnimplemented,
+	eth.ReceiptsMsg:                   handleUnimplemented,
+	eth.NewBlockHashesMsg:             handleNewBlockHashes,
+	eth.NewBlockMsg:                   handleNewBlockMsg,
+	eth.TransactionsMsg:               handleTransactions,
+	eth.NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
+	eth.GetPooledTransactionsMsg:      handleUnimplemented,
+	eth.PooledTransactionsMsg:         handlePooledTransactions,
+}
 
-var eth66 = map[uint64]msgHandler{}
+var eth66 = map[uint64]msgHandler{
+	eth.NewBlockHashesMsg:             handleNewBlockHashes,
+	eth.NewBlockMsg:                   handleNewBlockMsg,
+	eth.TransactionsMsg:               handleTransactions,
+	eth.NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
+	// eth66 messages have request-id
+	eth.GetBlockHeadersMsg:       handleGetBlockHeaders66,
+	eth.BlockHeadersMsg:          handleBlockHeaders66,
+	eth.GetBlockBodiesMsg:        handleGetBlockBodies66,
+	eth.BlockBodiesMsg:           handleBlockBodies66,
+	eth.GetNodeDataMsg:           handleUnimplemented,
+	eth.NodeDataMsg:              handleUnimplemented,
+	eth.GetReceiptsMsg:           handleUnimplemented,
+	eth.ReceiptsMsg:              handleUnimplemented,
+	eth.GetPooledTransactionsMsg: handleUnimplemented,
+	eth.PooledTransactionsMsg:    handlePooledTransactions66,
+}
 
 func handleMessage(backend Backend, peer *Peer) error {
 	msg, err := peer.rw.ReadMsg()

@@ -1,7 +1,10 @@
 package logger
 
-import "github.com/sirupsen/logrus"
+import (
+	"github.com/sirupsen/logrus"
+)
 
+// Entry type
 type Entry struct {
 	e *logrus.Entry
 }

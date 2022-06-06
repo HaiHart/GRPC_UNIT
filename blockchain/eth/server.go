@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/massbitprotocol/turbo/blockchain/network"
+	"os"
 	"path"
 )
 
@@ -23,7 +24,6 @@ func NewServer(parent context.Context, config *network.EthConfig, dataDir string
 	} else {
 		privateKeyPath := path.Join(dataDir, ".gatewaykey")
 		privateKeyFromFile, generated, err := LoadOrGeneratePrivateKey(privateKeyPath)
-
 		if err != nil {
 			keyWriteErr, ok := err.(keyWriteError)
 			if ok {
@@ -32,7 +32,6 @@ func NewServer(parent context.Context, config *network.EthConfig, dataDir string
 				return nil, err
 			}
 		}
-
 		if generated {
 			logger.Warn("no private key found, generating new one", "path", privateKeyPath)
 		}
@@ -73,4 +72,28 @@ func NewServer(parent context.Context, config *network.EthConfig, dataDir string
 		cancel: cancel,
 	}
 	return s, nil
+}
+
+// NewServerWithEthLogger returns the p2p server preconfigured with the default Ethereum logger
+func NewServerWithEthLogger(ctx context.Context, config *network.EthConfig, dataDir string) (*Server, error) {
+	l := log.New()
+	l.SetHandler(log.StreamHandler(os.Stdout, log.TerminalFormat(true)))
+
+	return NewServer(ctx, config, dataDir, l)
+}
+
+// Stop shutdowns the p2p server and any additional context relevant goroutines
+func (s *Server) Stop() {
+	s.cancel()
+	s.Server.Stop()
+}
+
+// AddEthLoggerFileHandler registers additional file handler by file path
+func (s *Server) AddEthLoggerFileHandler(path string) error {
+	fileHandler, err := log.FileHandler(path, log.TerminalFormat(false))
+	if err != nil {
+		return err
+	}
+	s.Server.Logger.SetHandler(log.MultiHandler(fileHandler, s.Server.Logger.GetHandler()))
+	return nil
 }

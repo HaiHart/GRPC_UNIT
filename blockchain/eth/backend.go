@@ -7,6 +7,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/massbitprotocol/turbo/blockchain/network"
+	log "github.com/massbitprotocol/turbo/logger"
 	"time"
 )
 
@@ -75,14 +76,44 @@ func (h *Handler) Handle(peer *Peer, packet eth.Packet) error {
 		h.chain.InitializeDifficulty(p.Head, p.TD)
 		return nil
 	case *eth.TransactionsPacket:
-		h.processTransactions(peer, *p)
-		return nil
+		return h.processTransactions(peer, *p)
+	case *eth.PooledTransactionsPacket:
+		return h.processTransactions(peer, *p)
+	case *eth.NewPooledTransactionHashesPacket:
+		return h.processTransactionHashes(peer, *p)
+	case *eth.NewBlockPacket:
+		return h.processBlock(peer, NewBlockInfo(p.Block, p.TD))
+	case *eth.NewBlockHashesPacket:
+		return h.processBlockAnnouncement(peer, *p)
+	case *eth.BlockHeadersPacket:
+		return h.processBlockHeaders(peer, *p)
 	default:
 		return fmt.Errorf("unexpected eth packet type: %v", packet)
 	}
 }
 
 func (h *Handler) processTransactions(peer *Peer, txs []*ethtypes.Transaction) error {
+	log.Infof("process transactions: %v", txs)
+	return nil
+}
+
+func (h *Handler) processTransactionHashes(peer *Peer, txHashes []ethcommon.Hash) error {
+	log.Infof("process transaction hashes: %v", txHashes)
+	return nil
+}
+
+func (h *Handler) processBlock(peer *Peer, blockInfo *BlockInfo) error {
+	log.Infof("process block: %v", blockInfo)
+	return nil
+}
+
+func (h *Handler) processBlockAnnouncement(peer *Peer, newBlocks eth.NewBlockHashesPacket) error {
+	log.Infof("process block announcement: %v", newBlocks)
+	return nil
+}
+
+func (h *Handler) processBlockHeaders(peer *Peer, blockHeaders eth.BlockHeadersPacket) error {
+	log.Infof("process block headers: %v", blockHeaders)
 	return nil
 }
 

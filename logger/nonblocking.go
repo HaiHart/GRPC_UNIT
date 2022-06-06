@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const backlog = 100000
+const backLog = 100000
 
 type line struct {
 	data  *Fields
@@ -25,23 +25,24 @@ type nonBlocking struct {
 	wg           sync.WaitGroup
 }
 
-// NonBlocking log
+// NonBlocking logs via channel to reduce contention
 var NonBlocking *nonBlocking
 
 func init() {
+	NonBlocking = newNonBlockingLogger()
 }
 
-func logOneLine(l line) {
+func logOneLine(oneline line) {
 	entry := logrus.NewEntry(logrus.StandardLogger())
-	entry.Time = l.time
-	if l.data != nil {
-		entry = entry.WithFields(logrus.Fields(*l.data))
+	entry.Time = oneline.time
+	if oneline.data != nil {
+		entry = entry.WithFields(logrus.Fields(*oneline.data))
 	}
-	entry.Log(logrus.Level(l.level), l.msg)
+	entry.Log(logrus.Level(oneline.level), oneline.msg)
 }
 
 func newNonBlockingLogger() *nonBlocking {
-	lines := make(chan line, backlog)
+	lines := make(chan line, backLog)
 	ctx, cancel := context.WithCancel(context.Background())
 	l := &nonBlocking{lines: lines, ctx: ctx, cancel: cancel}
 	l.wg.Add(1)
@@ -49,17 +50,19 @@ func newNonBlockingLogger() *nonBlocking {
 		defer l.wg.Done()
 		for {
 			select {
-			case oneline, ok := <-lines:
+			case oneLine, ok := <-lines:
+				// if we got an error on channel we have noting more to do
 				if !ok {
 					logrus.Errorf("non blocking log channel unexpectdly closed. nonBlockingLogger stopped")
 					return
 				}
-				logOneLine(oneline)
+				logOneLine(oneLine)
 			case <-ctx.Done():
 				for {
 					select {
-					case oneline := <-lines:
-						logOneLine(oneline)
+					case oneLine := <-lines:
+						// if we got an error on channel we have noting more to do
+						logOneLine(oneLine)
 					default:
 						return
 					}
@@ -76,13 +79,13 @@ func (l *nonBlocking) AvoidChannel() {
 }
 
 // Logf - main log function
-func (l *nonBlocking) Logf(level Level, fields *Fields, format string, args ...interface{}) {
+func (l nonBlocking) Logf(level Level, fields *Fields, format string, args ...interface{}) {
 	if !IsLevelEnabled(level) {
 		return
 	}
 
 	oneLine := line{
-		msg:   fmt.Sprintf(format, args),
+		msg:   fmt.Sprintf(format, args...),
 		data:  fields,
 		level: level,
 		time:  time.Now(),
@@ -96,11 +99,11 @@ func (l *nonBlocking) Logf(level Level, fields *Fields, format string, args ...i
 	select {
 	case l.lines <- oneLine:
 	default:
-		logrus.Errorf("Unable to use logger properly")
+		logrus.Errorf("Unable to use FastLogger properly")
 	}
 }
 
-func (l *nonBlocking) Log(level Level, fields *Fields, a ...interface{}) {
+func (l nonBlocking) Log(level Level, fields *Fields, a ...interface{}) {
 	if !IsLevelEnabled(level) {
 		return
 	}

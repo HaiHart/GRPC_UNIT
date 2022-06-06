@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p"
 	log "github.com/massbitprotocol/turbo/logger"
@@ -106,6 +107,11 @@ func (ep *Peer) ID() string {
 func (ep *Peer) String() string {
 	id := ep.p.ID()
 	return fmt.Sprintf("ETH/%x@%v", id[:8], ep.p.RemoteAddr())
+}
+
+// SendBlockHeaders sends a batch of block headers to the peer
+func (ep *Peer) SendBlockHeaders(headers []*ethtypes.Header) error {
+	return ep.send(eth.BlockHeadersMsg, eth.BlockHeadersPacket(headers))
 }
 
 // IPEndpoint provides the peer IP endpoint
