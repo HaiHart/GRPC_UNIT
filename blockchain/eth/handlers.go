@@ -5,21 +5,12 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 )
 
-func handleGetBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
-	return nil
-
-}
-
 func handleGetBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	return nil
 }
 
 func answerGetBlockHeaders(backend Backend, query *eth.GetBlockHeadersPacket, peer *Peer) ([]*ethtypes.Header, error) {
 	return nil, nil
-}
-
-func handleGetBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
-	return nil
 }
 
 func handleGetBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
@@ -38,10 +29,6 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	return nil
 }
 
-func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
-	return nil
-}
-
 func handlePooledTransactions66(backend Backend, msg Decoder, peer *Peer) error {
 	return nil
 }
@@ -54,15 +41,7 @@ func handleNewBlockHashes(backend Backend, msg Decoder, peer *Peer) error {
 	return nil
 }
 
-func handleBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
-	return nil
-}
-
 func handleBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
-	return nil
-}
-
-func handleBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
 	return nil
 }
 

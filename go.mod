@@ -3,7 +3,7 @@ module github.com/massbitprotocol/turbo
 go 1.18
 
 require (
-	github.com/ethereum/go-ethereum v1.10.8
+	github.com/ethereum/go-ethereum v1.10.18
 	github.com/orandin/lumberjackrus v1.0.1
 	github.com/orcaman/concurrent-map v1.0.0
 	github.com/sirupsen/logrus v1.8.1
@@ -13,10 +13,11 @@ require (
 require (
 	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 // indirect
 	github.com/VictoriaMetrics/fastcache v1.6.0 // indirect
-	github.com/btcsuite/btcd v0.20.1-beta // indirect
+	github.com/btcsuite/btcd/btcec/v2 v2.2.0 // indirect
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.0-20190314233015-f79a8a8ca69d // indirect
 	github.com/deckarep/golang-set v1.8.0 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/go-ole/go-ole v1.2.1 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
