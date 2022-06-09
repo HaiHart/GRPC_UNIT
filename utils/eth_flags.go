@@ -13,6 +13,10 @@ var (
 		Usage:    "private key for encrypted communication with Ethereum node",
 		Required: false,
 	}
+	EthWsUriFlag = &cli.StringFlag{
+		Name:  "eth-ws-uri",
+		Usage: "Ethereum websockets endpoint",
+	}
 	MultiNode = &cli.StringFlag{
 		Name: "multi-node",
 		Usage: "comma separated list of enode and Ethereum websockets endpoint pairs. " +

@@ -9,6 +9,7 @@ import (
 	"github.com/massbitprotocol/turbo/utils"
 	"github.com/urfave/cli/v2"
 	"math/big"
+	"strings"
 	"time"
 )
 
@@ -44,7 +45,13 @@ func NewPresetEthConfigFromCLI(ctx *cli.Context) (*EthConfig, error) {
 
 	var peers []PeerInfo
 	if ctx.IsSet(utils.MultiNode.Name) {
-
+		if ctx.IsSet(utils.EnodesFlag.Name) {
+			return nil, fmt.Errorf("parameters --multi-node and --enodes should not be used simultaneously; if you would like to use multiple p2p or websockets connections, use --multi-node")
+		}
+		peers, err = ParseMultiNode(ctx.String(utils.MultiNode.Name))
+		if err != nil {
+			return nil, err
+		}
 	} else if ctx.IsSet(utils.EnodesFlag.Name) {
 		enodeStr := ctx.String(utils.EnodesFlag.Name)
 		peers = make([]PeerInfo, 0, 1)
@@ -56,17 +63,26 @@ func NewPresetEthConfigFromCLI(ctx *cli.Context) (*EthConfig, error) {
 		}
 		peer.Enode = node
 
+		if ctx.IsSet(utils.EthWsUriFlag.Name) {
+			ethWsURI := ctx.String(utils.EthWsUriFlag.Name)
+			err = validateWsURI(ethWsURI)
+			if err != nil {
+				return nil, err
+			}
+			peer.EthWsURI = ethWsURI
+		}
+
 		peers = append(peers, peer)
 	}
 
 	preset.StaticPeers = peers
 
 	if ctx.IsSet(utils.PrivateKeyFlag.Name) {
-		privateKeyHexString := ctx.String(utils.PrivateKeyFlag.Name)
-		if len(privateKeyHexString) != privateKeyLen {
-			return nil, fmt.Errorf("incorrect private key length: expected length %v, actual length %v", privateKeyLen, len(privateKeyHexString))
+		privateKeyHex := ctx.String(utils.PrivateKeyFlag.Name)
+		if len(privateKeyHex) != privateKeyLen {
+			return nil, fmt.Errorf("incorrect private key length: expected length %v, actual length %v", privateKeyLen, len(privateKeyHex))
 		}
-		privateKey, err := crypto.HexToECDSA(privateKeyHexString)
+		privateKey, err := crypto.HexToECDSA(privateKeyHex)
 		if err != nil {
 			return nil, err
 		}
@@ -74,6 +90,45 @@ func NewPresetEthConfigFromCLI(ctx *cli.Context) (*EthConfig, error) {
 	}
 
 	return &preset, nil
+}
+
+// ParseMultiNode parses a string into list of PeerInfo, according to expected format of multi-eth-ws-uri parameter
+func ParseMultiNode(multiEthWSURI string) ([]PeerInfo, error) {
+	enodeWsPairs := strings.Split(multiEthWSURI, ",")
+	peers := make([]PeerInfo, 0, len(enodeWsPairs))
+	for _, pairStr := range enodeWsPairs {
+		var peer PeerInfo
+		enodeWsPair := strings.Split(pairStr, "+")
+		if len(enodeWsPair) == 0 {
+			return nil, fmt.Errorf("unable to parse --multi-node. Expected format: enode1+eth-ws-uri-1,enode2+,enode3+eth-ws-uri-3")
+		}
+		en, err := enode.Parse(enode.ValidSchemes, enodeWsPair[0])
+		if err != nil {
+			return nil, err
+		}
+		peer.Enode = en
+
+		ethWsURI := ""
+		if len(enodeWsPair) > 1 {
+			ethWsURI = enodeWsPair[1]
+			if ethWsURI != "" {
+				err = validateWsURI(ethWsURI)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+		peer.EthWsURI = ethWsURI
+		peers = append(peers, peer)
+	}
+	return peers, nil
+}
+
+func validateWsURI(ethWsURI string) error {
+	if !strings.HasPrefix(ethWsURI, "ws://") && !strings.HasPrefix(ethWsURI, "wss://") {
+		return fmt.Errorf("unable to parse websockets URI [%v]. Expected format: ws(s)://IP:PORT", ethWsURI)
+	}
+	return nil
 }
 
 // StaticEnodes makes a list of enodes only from StaticPeers

@@ -10,10 +10,10 @@ import (
 )
 
 // SupportedProtocols is the list of all Ethereum protocols supported by this client
-var SupportedProtocols = []uint{eth.ETH66}
+var SupportedProtocols = []uint{eth.ETH65, eth.ETH66}
 
 // ProtocolLengths is a mapping of each supported devp2p protocol to its message version length
-var ProtocolLengths = map[uint]uint64{eth.ETH66: 17}
+var ProtocolLengths = map[uint]uint64{eth.ETH65: 17, eth.ETH66: 17}
 
 // MakeProtocols generates the set of supported protocols structs for p2p server
 func MakeProtocols(ctx context.Context, backend Backend) []p2p.Protocol {
@@ -65,6 +65,23 @@ type Decoder interface {
 	Decode(val interface{}) error
 }
 
+var eth65 = map[uint64]msgHandler{
+	eth.GetBlockHeadersMsg:            handleGetBlockHeaders,
+	eth.BlockHeadersMsg:               handleBlockHeaders,
+	eth.GetBlockBodiesMsg:             handleGetBlockBodies,
+	eth.BlockBodiesMsg:                handleBlockBodies,
+	eth.GetNodeDataMsg:                handleUnimplemented,
+	eth.NodeDataMsg:                   handleUnimplemented,
+	eth.GetReceiptsMsg:                handleUnimplemented,
+	eth.ReceiptsMsg:                   handleUnimplemented,
+	eth.NewBlockHashesMsg:             handleNewBlockHashes,
+	eth.NewBlockMsg:                   handleNewBlockMsg,
+	eth.TransactionsMsg:               handleTransactions,
+	eth.NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
+	eth.GetPooledTransactionsMsg:      handleUnimplemented,
+	eth.PooledTransactionsMsg:         handlePooledTransactions,
+}
+
 var eth66 = map[uint64]msgHandler{
 	eth.NewBlockHashesMsg:             handleNewBlockHashes,
 	eth.NewBlockMsg:                   handleNewBlockMsg,
@@ -95,7 +112,12 @@ func handleMessage(backend Backend, peer *Peer) error {
 		log.Tracef("%v: handling message with code: %v took %v", peer, msg.Code, time.Since(startTime))
 	}()
 
-	handler, ok := eth66[msg.Code]
+	handlers := eth65
+	if peer.version >= eth.ETH66 {
+		handlers = eth66
+	}
+	handler, ok := handlers[msg.Code]
+
 	if ok {
 		return handler(backend, msg, peer)
 	}

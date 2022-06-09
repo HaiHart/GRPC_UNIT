@@ -13,6 +13,8 @@ import (
 	"github.com/massbitprotocol/turbo/utils"
 	cmap "github.com/orcaman/concurrent-map"
 	"math/big"
+	"math/rand"
+	"strconv"
 	"time"
 )
 
@@ -59,7 +61,7 @@ type Peer struct {
 	sentHead            blockRef
 	queuedBlocks        []*eth.NewBlockPacket
 
-	RequestConfirmations bool
+	requestConfirmations bool
 }
 
 // NewPeer returns a wrapped Ethereum peer
@@ -87,7 +89,7 @@ func newPeer(parent context.Context, p *p2p.Peer, rw p2p.MsgReadWriter, version 
 		newBlockCh:           make(chan *eth.NewBlockPacket, blockChannelBacklog),
 		blockConfirmationCh:  make(chan common.Hash, blockConfirmationChannelBacklog),
 		queuedBlocks:         make([]*eth.NewBlockPacket, 0),
-		RequestConfirmations: true,
+		requestConfirmations: true,
 	}
 	peerID := p.ID()
 	peer.log = log.WithFields(log.Fields{
@@ -109,11 +111,6 @@ func (ep *Peer) String() string {
 	return fmt.Sprintf("ETH/%x@%v", id[:8], ep.p.RemoteAddr())
 }
 
-// SendBlockHeaders sends a batch of block headers to the peer
-func (ep *Peer) SendBlockHeaders(headers []*ethtypes.Header) error {
-	return ep.send(eth.BlockHeadersMsg, eth.BlockHeadersPacket(headers))
-}
-
 // IPEndpoint provides the peer IP endpoint
 func (ep *Peer) IPEndpoint() types.NodeEndpoint {
 	return ep.endpoint
@@ -122,6 +119,12 @@ func (ep *Peer) IPEndpoint() types.NodeEndpoint {
 // Log returns the context logger for the peer connection
 func (ep *Peer) Log() *log.Entry {
 	return ep.log.WithField("head", ep.confirmedHead)
+}
+
+// Disconnect closes the running peer with a protocol error
+func (ep *Peer) Disconnect(reason p2p.DiscReason) {
+	ep.p.Disconnect(reason)
+	ep.disconnected = true
 }
 
 // Start launches the block sending loop that queued blocks get sent in order to the peer
@@ -142,6 +145,10 @@ func (ep *Peer) blockLoop() {
 	for {
 		select {}
 	}
+}
+
+// should only be called by blockLoop when then length of the queue has already been checked
+func (ep *Peer) sendTopBlock() {
 }
 
 // Handshake executes the Ethereum protocol Handshake. Unlike Geth, the gateway waits for the peer status message before sending its own, in order to replicate some peer status fields.
@@ -205,9 +212,177 @@ func (ep *Peer) readStatus() (*eth.StatusPacket, error) {
 	return &status, nil
 }
 
+// NotifyResponse informs any listeners dependent on a request/response call to this peer, indicating if any channels were waiting for the message
+func (ep *Peer) NotifyResponse(packet eth.Packet) bool {
+	responseCh := <-ep.responseQueue
+	if responseCh != nil {
+		responseCh <- packet
+	}
+	return responseCh != nil
+}
+
+// NotifyResponse66 informs any listeners dependent on a request/response call to this ETH66 peer, indicating if any channels were waiting for the message
+func (ep *Peer) NotifyResponse66(requestID uint64, packet eth.Packet) (bool, error) {
+	rawResponseCh, ok := ep.responseQueue66.Pop(convertRequestIDKey(requestID))
+	if !ok {
+		return false, ErrUnknownRequestID
+	}
+
+	responseCh := rawResponseCh.(chan eth.Packet)
+	if responseCh != nil {
+		responseCh <- packet
+	}
+	return responseCh != nil, nil
+}
+
+// UpdateHead sets the latest confirmed block on the peer. This may release or prune queued blocks on the peer connection.
+func (ep *Peer) UpdateHead(height uint64, hash common.Hash) {
+	ep.Log().Debugf("confirming new head (height=%v, hash=%v)", height, hash)
+	ep.newHeadCh <- blockRef{
+		height: height,
+		hash:   hash,
+	}
+}
+
+// QueueNewBlock adds a new block to the queue to be sent to the peer in the order the peer is ready for.
+func (ep *Peer) QueueNewBlock(block *ethtypes.Block, td *big.Int) {
+
+}
+
+// AnnounceBlock pushes a new block announcement to the peer. This is used when the total difficult is unknown, and so a new block message would be invalid.
+func (ep *Peer) AnnounceBlock(hash common.Hash, number uint64) error {
+	return nil
+}
+
+// SendBlockBodies sends a batch of block bodies to the peer
+func (ep *Peer) SendBlockBodies(bodies []*eth.BlockBody) error {
+	return ep.send(eth.BlockBodiesMsg, eth.BlockBodiesPacket(bodies))
+}
+
+// ReplyBlockBodies sends a batch of requested block bodies to the peer (ETH66)
+func (ep *Peer) ReplyBlockBodies(id uint64, bodies []*eth.BlockBody) error {
+	return ep.send(eth.BlockBodiesMsg, eth.BlockBodiesPacket66{
+		RequestId:         id,
+		BlockBodiesPacket: bodies,
+	})
+}
+
+// SendBlockHeaders sends a batch of block headers to the peer
+func (ep *Peer) SendBlockHeaders(headers []*ethtypes.Header) error {
+	return ep.send(eth.BlockHeadersMsg, eth.BlockHeadersPacket(headers))
+}
+
+// ReplyBlockHeaders sends batch of requested block headers to the peer (ETH66)
+func (ep *Peer) ReplyBlockHeaders(id uint64, headers []*ethtypes.Header) error {
+	return ep.send(eth.BlockHeadersMsg, eth.BlockHeadersPacket66{
+		RequestId:          id,
+		BlockHeadersPacket: headers,
+	})
+}
+
+// SendTransactions sends pushes a batch of transactions to the peer
+func (ep *Peer) SendTransactions(txs ethtypes.Transactions) error {
+	return ep.send(eth.TransactionsMsg, txs)
+}
+
+// RequestTransactions requests a batch of announced transactions from the peer
+func (ep *Peer) RequestTransactions(txHashes []common.Hash) error {
+	return nil
+}
+
+// RequestBlock fetches the specified block from the peer, pushing the components to the channels upon request/response completion.
+func (ep *Peer) RequestBlock(blockHash common.Hash, headersCh chan eth.Packet, bodiesCh chan eth.Packet) error {
+	if ep.isVersion66() {
+		panic("unexpected call to request block for a ETH66 peer")
+	}
+
+	getHeadersPacket := &eth.GetBlockHeadersPacket{
+		Origin:  eth.HashOrNumber{Hash: blockHash},
+		Amount:  1,
+		Skip:    0,
+		Reverse: false,
+	}
+
+	getBodiesPacket := eth.GetBlockBodiesPacket{blockHash}
+
+	ep.registerForResponse(headersCh)
+	ep.registerForResponse(bodiesCh)
+
+	if err := ep.send(eth.GetBlockHeadersMsg, getHeadersPacket); err != nil {
+		return err
+	}
+	if err := ep.send(eth.GetBlockBodiesMsg, getBodiesPacket); err != nil {
+		return err
+	}
+	return nil
+}
+
+// RequestBlock66 fetches the specified block from the ETH66 peer, pushing the components to the channels upon request/response completion.
+func (ep *Peer) RequestBlock66(blockHash common.Hash, headersCh chan eth.Packet, bodiesCh chan eth.Packet) error {
+	if !ep.isVersion66() {
+		panic("unexpected call to request block 66 for a <ETH66 peer")
+	}
+
+	getHeadersPacket := &eth.GetBlockHeadersPacket{
+		Origin:  eth.HashOrNumber{Hash: blockHash},
+		Amount:  1,
+		Skip:    0,
+		Reverse: false,
+	}
+	getBodiesPacket := eth.GetBlockBodiesPacket{blockHash}
+
+	getHeadersRequestID := rand.Uint64()
+	getHeadersPacket66 := eth.GetBlockHeadersPacket66{
+		RequestId:             getHeadersRequestID,
+		GetBlockHeadersPacket: getHeadersPacket,
+	}
+	getBodiesRequestID := rand.Uint64()
+	getBodiesPacket66 := eth.GetBlockBodiesPacket66{
+		RequestId:            getBodiesRequestID,
+		GetBlockBodiesPacket: getBodiesPacket,
+	}
+
+	ep.registerForResponse66(getHeadersRequestID, headersCh)
+	ep.registerForResponse66(getBodiesRequestID, headersCh)
+
+	if err := ep.send(eth.GetBlockHeadersMsg, getHeadersPacket66); err != nil {
+		return err
+	}
+	if err := ep.send(eth.GetBlockBodiesMsg, getBodiesPacket66); err != nil {
+		return err
+	}
+	return nil
+}
+
+// RequestBlockHeader dispatches a request for the specified block header to the Ethereum peer with no expected handling on response
+func (ep *Peer) RequestBlockHeader(hash common.Hash) error {
+	return nil
+}
+
+// RequestBlockHeaderRaw dispatches a generalized GetHeaders message to the Ethereum peer
+func (ep *Peer) RequestBlockHeaderRaw(origin eth.HashOrNumber, amount, skip uint64, reverse bool, responseCh chan eth.Packet) error {
+	return nil
+}
+
+func (ep *Peer) sendNewBlock(packet *eth.NewBlockPacket) error {
+	return nil
+}
+
+func (ep *Peer) registerForResponse(responseCh chan eth.Packet) {
+	ep.responseQueue <- responseCh
+}
+
+func (ep *Peer) registerForResponse66(requestID uint64, responseCh chan eth.Packet) {
+	ep.responseQueue66.Set(convertRequestIDKey(requestID), responseCh)
+}
+
 func (ep *Peer) send(msgCode uint64, data interface{}) error {
 	if ep.disconnected {
 		return nil
 	}
 	return p2p.Send(ep.rw, msgCode, data)
+}
+
+func convertRequestIDKey(requestID uint64) string {
+	return strconv.FormatUint(requestID, 10)
 }
