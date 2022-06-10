@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/massbitprotocol/turbo/blockchain"
 	"github.com/massbitprotocol/turbo/blockchain/network"
 	"os"
 	"path"
@@ -17,7 +18,7 @@ type Server struct {
 	cancel context.CancelFunc
 }
 
-func NewServer(parent context.Context, config *network.EthConfig, dataDir string, logger log.Logger) (*Server, error) {
+func NewServer(parent context.Context, config *network.EthConfig, bridge blockchain.Bridge, dataDir string, logger log.Logger) (*Server, error) {
 	var privateKey *ecdsa.PrivateKey
 	if config.PrivateKey != nil {
 		privateKey = config.PrivateKey
@@ -39,7 +40,7 @@ func NewServer(parent context.Context, config *network.EthConfig, dataDir string
 	}
 
 	ctx, cancel := context.WithCancel(parent)
-	backend := NewHandler(ctx, config)
+	backend := NewHandler(ctx, bridge, config)
 
 	server := p2p.Server{
 		Config: p2p.Config{
@@ -75,11 +76,10 @@ func NewServer(parent context.Context, config *network.EthConfig, dataDir string
 }
 
 // NewServerWithEthLogger returns the p2p server preconfigured with the default Ethereum logger
-func NewServerWithEthLogger(ctx context.Context, config *network.EthConfig, dataDir string) (*Server, error) {
+func NewServerWithEthLogger(ctx context.Context, config *network.EthConfig, bridge blockchain.Bridge, dataDir string) (*Server, error) {
 	l := log.New()
 	l.SetHandler(log.StreamHandler(os.Stdout, log.TerminalFormat(true)))
-
-	return NewServer(ctx, config, dataDir, l)
+	return NewServer(ctx, config, bridge, dataDir, l)
 }
 
 // Stop shutdowns the p2p server and any additional context relevant goroutines

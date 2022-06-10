@@ -93,8 +93,8 @@ func NewPresetEthConfigFromCLI(ctx *cli.Context) (*EthConfig, error) {
 }
 
 // ParseMultiNode parses a string into list of PeerInfo, according to expected format of multi-eth-ws-uri parameter
-func ParseMultiNode(multiEthWSURI string) ([]PeerInfo, error) {
-	enodeWsPairs := strings.Split(multiEthWSURI, ",")
+func ParseMultiNode(multiEthWsURI string) ([]PeerInfo, error) {
+	enodeWsPairs := strings.Split(multiEthWsURI, ",")
 	peers := make([]PeerInfo, 0, len(enodeWsPairs))
 	for _, pairStr := range enodeWsPairs {
 		var peer PeerInfo
@@ -129,6 +129,15 @@ func validateWsURI(ethWsURI string) error {
 		return fmt.Errorf("unable to parse websockets URI [%v]. Expected format: ws(s)://IP:PORT", ethWsURI)
 	}
 	return nil
+}
+
+// Update updates properties of the EthConfig pushed down from server configuration
+func (ec *EthConfig) Update(otherConfig EthConfig) {
+	ec.Network = otherConfig.Network
+	ec.TotalDifficulty = otherConfig.TotalDifficulty
+	ec.Head = otherConfig.Head
+	ec.Genesis = otherConfig.Genesis
+	ec.BlockConfirmationsCount = otherConfig.BlockConfirmationsCount
 }
 
 // StaticEnodes makes a list of enodes only from StaticPeers

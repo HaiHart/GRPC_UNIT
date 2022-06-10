@@ -117,7 +117,6 @@ func handleMessage(backend Backend, peer *Peer) error {
 		handlers = eth66
 	}
 	handler, ok := handlers[msg.Code]
-
 	if ok {
 		return handler(backend, msg, peer)
 	}

@@ -174,7 +174,8 @@ func (c *Chain) ConfirmBlock(hash ethcommon.Hash) int {
 	return c.updateChainState(bm.height, hash, header.ParentHash)
 }
 
-// GetNewHeadsForBDN fetches the newest blocks on the chainstate that have not previously been sent to the BDN. In cases of error, as many entries are still returned along with the error. Entries are returned in descending order.
+// GetNewHeadsForBDN fetches the newest blocks on the chainstate that have not previously been sent to the BDN.
+// In cases of error, as many entries are still returned along with the error. Entries are returned in descending order.
 func (c *Chain) GetNewHeadsForBDN(count int) ([]*BlockInfo, error) {
 	c.chainLock.RLock()
 	defer c.chainLock.RUnlock()
@@ -345,11 +346,10 @@ func (c *Chain) GetHeaders(start eth.HashOrNumber, count int, skip int, reverse 
 	} else if start.Hash != (ethcommon.Hash{}) {
 		originHash = start.Hash
 		bm, ok := c.getBlockMetadata(originHash)
-		originHeight = bm.height
-
 		if !ok {
 			return nil, fmt.Errorf("could not retrieve a corresponding height for block: %v", originHash)
 		}
+		originHeight = bm.height
 		originHeader, ok := c.getBlockHeader(originHeight, originHash)
 		if !ok {
 			return nil, fmt.Errorf("no header was with height %v and hash %v", originHeight, originHash)
@@ -365,17 +365,12 @@ func (c *Chain) GetHeaders(start eth.HashOrNumber, count int, skip int, reverse 
 	}
 
 	directionalMultiplier := 1
-	increment := skip + 1
 	if reverse {
 		directionalMultiplier = -1
 	}
-	increment *= directionalMultiplier
+	increment := (skip + 1) * directionalMultiplier
 
 	nextHeight := int(originHeight) + increment
-	if len(c.chainState) == 0 {
-		return nil, fmt.Errorf("no entries stored at height: %v", nextHeight)
-	}
-
 	// iterate through all requested headers and fetch results
 	for height := nextHeight; len(requestedHeaders) < count; height += increment {
 		header, err := c.getHeaderAtHeight(uint64(height))
@@ -519,8 +514,6 @@ func (c *Chain) getHeaderAtHeight(height uint64) (*ethtypes.Header, error) {
 	}
 
 	header, ok := c.getBlockHeader(height, c.chainState[requestedIndex].hash)
-
-	// block in chainstate seems to no longer be in storage, error out
 	if !ok {
 		return nil, fmt.Errorf("%v: no header at height %v", c.chainState, height)
 	}

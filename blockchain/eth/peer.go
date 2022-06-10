@@ -143,12 +143,127 @@ func (ep *Peer) isVersion66() bool {
 
 func (ep *Peer) blockLoop() {
 	for {
-		select {}
+		select {
+		case newHead := <-ep.newHeadCh:
+			if newHead.height < ep.confirmedHead.height {
+				break
+			}
+
+			// update most recent blocks
+			ep.confirmedHead = newHead
+			if newHead.height >= ep.sentHead.height {
+				ep.sentHead = newHead
+			}
+
+			// check if any blocks need to be released and determine number of blocks to prune
+			var (
+				breakpoint   = -1
+				releaseBlock = false
+			)
+			for i, qb := range ep.queuedBlocks {
+				queuedBlock := qb.Block
+
+				nextHeight := queuedBlock.NumberU64() == ep.confirmedHead.height+1
+				isNextBlock := nextHeight && queuedBlock.ParentHash() == ep.confirmedHead.hash
+				exceedsHeight := queuedBlock.NumberU64() > ep.confirmedHead.height+1
+
+				// next block: stop here and release
+				if isNextBlock {
+					breakpoint = i
+					releaseBlock = true
+					break
+				}
+				// next height: could be another block at same height, set breakpoint and continue
+				if nextHeight {
+					breakpoint = i
+				}
+				// exceeds height: set breakpoint if not set previously from block at "nextHeight" and break
+				if exceedsHeight {
+					if breakpoint == -1 {
+						breakpoint = i
+					}
+					break
+				}
+			}
+
+			// no blocks match, so all must be stale
+			if breakpoint == -1 {
+				breakpoint = len(ep.queuedBlocks)
+			}
+
+			// prune blocks
+			for _, prunedBlock := range ep.queuedBlocks[:breakpoint] {
+				ep.Log().Debugf("pruning now stale block %v at height %v after confirming %v", prunedBlock.Block.Hash(), prunedBlock.Block.NumberU64(), newHead)
+			}
+			ep.queuedBlocks = ep.queuedBlocks[breakpoint:]
+
+			// release block if possible
+			if releaseBlock {
+				ep.sendTopBlock()
+			}
+		case newBlock := <-ep.newBlockCh:
+			newBlockNumber := newBlock.Block.NumberU64()
+			newBlockHash := newBlock.Block.Hash()
+
+			// always ignore stales blocks
+			if newBlockNumber <= ep.sentHead.height && ep.sentHead.height != 0 {
+				ep.Log().Debugf("skipping queued stale block %v at height %v, already sent block of height %v", newBlockHash, newBlockNumber, ep.sentHead)
+				break
+			}
+
+			// release next block if ready
+			nextBlock := newBlockNumber == ep.confirmedHead.height+1 && newBlock.Block.ParentHash() == ep.confirmedHead.hash
+			initialBlock := ep.confirmedHead.height == 0 && ep.sentHead.height == 0 && newBlock.Block.ParentHash() == ep.confirmedHead.hash
+			if nextBlock || initialBlock {
+				ep.Log().Debugf("queued block %v at height %v is next expected (%v), sending immediately", newBlockHash, newBlockNumber, ep.confirmedHead.height+1)
+				err := ep.sendNewBlock(newBlock)
+				if err != nil {
+					ep.Log().Errorf("could not send block %v to peer %v: %v", newBlockHash, ep, err)
+				}
+				ep.sentHead = blockRef{
+					height: newBlockNumber,
+					hash:   newBlockHash,
+				}
+			} else {
+				// find position in block queue that block should be inserted at
+				insertionPoint := len(ep.queuedBlocks)
+				for i, block := range ep.queuedBlocks {
+					if block.Block.NumberU64() > newBlock.Block.NumberU64() {
+						insertionPoint = i
+					}
+				}
+
+				ep.Log().Debugf("queuing block %v at height %v behind %v blocks", newBlockHash, newBlockNumber, insertionPoint)
+
+				// insert block at insertion point
+				ep.queuedBlocks = append(ep.queuedBlocks, &eth.NewBlockPacket{})
+				copy(ep.queuedBlocks[insertionPoint+1:], ep.queuedBlocks[insertionPoint:])
+				ep.queuedBlocks[insertionPoint] = newBlock
+
+				if len(ep.queuedBlocks) > blockQueueMaxSize {
+					ep.queuedBlocks = ep.queuedBlocks[len(ep.queuedBlocks)-blockQueueMaxSize:]
+				}
+			}
+		case <-ep.ctx.Done():
+			return
+		}
 	}
 }
 
 // should only be called by blockLoop when then length of the queue has already been checked
 func (ep *Peer) sendTopBlock() {
+	block := ep.queuedBlocks[0]
+	ep.queuedBlocks = ep.queuedBlocks[1:]
+	ep.sentHead = blockRef{
+		height: block.Block.NumberU64(),
+		hash:   block.Block.Hash(),
+	}
+
+	ep.Log().Debugf("after confirming height %v, immediately sending next block %v at height %v", ep.confirmedHead.height, block.Block.Hash(), block.Block.NumberU64())
+	err := ep.sendNewBlock(block)
+	if err != nil {
+		ep.Log().Errorf("could not send block %v: %v", block.Block.Hash(), err)
+	}
 }
 
 // Handshake executes the Ethereum protocol Handshake. Unlike Geth, the gateway waits for the peer status message before sending its own, in order to replicate some peer status fields.
@@ -246,12 +361,19 @@ func (ep *Peer) UpdateHead(height uint64, hash common.Hash) {
 
 // QueueNewBlock adds a new block to the queue to be sent to the peer in the order the peer is ready for.
 func (ep *Peer) QueueNewBlock(block *ethtypes.Block, td *big.Int) {
-
+	packet := eth.NewBlockPacket{
+		Block: block,
+		TD:    td,
+	}
+	ep.newBlockCh <- &packet
 }
 
 // AnnounceBlock pushes a new block announcement to the peer. This is used when the total difficult is unknown, and so a new block message would be invalid.
 func (ep *Peer) AnnounceBlock(hash common.Hash, number uint64) error {
-	return nil
+	packet := eth.NewBlockHashesPacket{
+		{Hash: hash, Number: number},
+	}
+	return ep.send(eth.NewBlockHashesMsg, packet)
 }
 
 // SendBlockBodies sends a batch of block bodies to the peer
@@ -287,7 +409,14 @@ func (ep *Peer) SendTransactions(txs ethtypes.Transactions) error {
 
 // RequestTransactions requests a batch of announced transactions from the peer
 func (ep *Peer) RequestTransactions(txHashes []common.Hash) error {
-	return nil
+	packet := eth.GetPooledTransactionsPacket(txHashes)
+	if ep.isVersion66() {
+		return ep.send(eth.GetPooledTransactionsMsg, eth.GetPooledTransactionsPacket66{
+			RequestId:                   rand.Uint64(),
+			GetPooledTransactionsPacket: packet,
+		})
+	}
+	return ep.send(eth.GetPooledTransactionsMsg, packet)
 }
 
 // RequestBlock fetches the specified block from the peer, pushing the components to the channels upon request/response completion.
@@ -356,15 +485,73 @@ func (ep *Peer) RequestBlock66(blockHash common.Hash, headersCh chan eth.Packet,
 
 // RequestBlockHeader dispatches a request for the specified block header to the Ethereum peer with no expected handling on response
 func (ep *Peer) RequestBlockHeader(hash common.Hash) error {
-	return nil
+	return ep.RequestBlockHeaderRaw(eth.HashOrNumber{Hash: hash}, 1, 0, false, nil)
 }
 
 // RequestBlockHeaderRaw dispatches a generalized GetHeaders message to the Ethereum peer
 func (ep *Peer) RequestBlockHeaderRaw(origin eth.HashOrNumber, amount, skip uint64, reverse bool, responseCh chan eth.Packet) error {
-	return nil
+	packet := eth.GetBlockHeadersPacket{
+		Origin:  origin,
+		Amount:  amount,
+		Skip:    skip,
+		Reverse: reverse,
+	}
+	if ep.isVersion66() {
+		requestID := rand.Uint64()
+		ep.registerForResponse66(requestID, responseCh)
+
+		return ep.send(eth.GetBlockHeadersMsg, eth.GetBlockHeadersPacket66{
+			RequestId:             requestID,
+			GetBlockHeadersPacket: &packet,
+		})
+	}
+
+	// intercept and discard handler on response
+	ep.registerForResponse(responseCh)
+	return ep.send(eth.GetBlockHeadersMsg, packet)
 }
 
 func (ep *Peer) sendNewBlock(packet *eth.NewBlockPacket) error {
+	err := ep.send(eth.NewBlockMsg, packet)
+	if err != nil {
+		return err
+	}
+
+	if ep.requestConfirmations {
+		go func() {
+			blockNumber := packet.Block.NumberU64()
+			blockHash := packet.Block.Hash()
+			count := 0
+
+			// check for fast confirmation
+			ticker := ep.clock.Ticker(fastBlockConfirmationInterval)
+			defer ticker.Stop()
+			for count < fastBlockConfirmationAttempts {
+				<-ticker.Alert()
+				if ep.confirmedHead.height >= blockNumber {
+					return
+				}
+				err := ep.RequestBlockHeader(blockHash)
+				if err != nil {
+					return
+				}
+				count++
+			}
+
+			// check for slower confirmation
+			ticker = ep.clock.Ticker(slowBlockConfirmationInterval)
+			for {
+				<-ticker.Alert()
+				if ep.confirmedHead.height >= blockNumber {
+					return
+				}
+				err = ep.RequestBlockHeader(blockHash)
+				if err != nil {
+					return
+				}
+			}
+		}()
+	}
 	return nil
 }
 

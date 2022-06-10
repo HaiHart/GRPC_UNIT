@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/massbitprotocol/turbo/blockchain"
 	"github.com/massbitprotocol/turbo/blockchain/eth"
 	"github.com/massbitprotocol/turbo/blockchain/network"
 	"github.com/massbitprotocol/turbo/config"
@@ -89,11 +90,13 @@ func runGateway(c *cli.Context) error {
 		return err
 	}
 
+	bridge := blockchain.NewBxBridge(eth.Converter{})
+
 	var blockchainServer *eth.Server
 	if startupBlockchainClient {
 		log.Infof("starting blockchain client with config for network ID: %v", ethConfig.Network)
 
-		blockchainServer, err = eth.NewServerWithEthLogger(ctx, ethConfig, c.String(utils.DataDirFlag.Name))
+		blockchainServer, err = eth.NewServerWithEthLogger(ctx, ethConfig, bridge, c.String(utils.DataDirFlag.Name))
 		if err != nil {
 			return err
 		}
