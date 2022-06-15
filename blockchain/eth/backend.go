@@ -77,231 +77,14 @@ func (h *Handler) RunPeer(ep *Peer, handler func(*Peer) error) error {
 	return handler(ep)
 }
 
-func (h *Handler) handleBDNBridge(ctx context.Context) {
-	for {
-		select {
-		case bdnTxs := <-h.bridge.ReceiveBDNTransactions():
-			h.processBDNTransactions(bdnTxs)
-		case request := <-h.bridge.ReceiveTransactionHashesRequest():
-			h.processBDNTransactionRequests(request)
-		case bdnBlock := <-h.bridge.ReceiveBlockFromBDN():
-			h.processBDNBlock(bdnBlock)
-		case config := <-h.bridge.ReceiveNetworkConfigUpdates():
-			h.config.Update(config)
-		case <-h.bridge.ReceiveBlockchainStatusRequest():
-			h.processBlockchainStatusRequest()
-		case <-ctx.Done():
-			return
-		}
-	}
+// GetHeaders assembles and returns a set of headers
+func (h *Handler) GetHeaders(start eth.HashOrNumber, count int, skip int, reverse bool) ([]*ethtypes.Header, error) {
+	return h.chain.GetHeaders(start, count, skip, reverse)
 }
 
-func (h *Handler) processBDNTransactions(bdnTxs []*types.TbTransaction) {
-	ethTxs := make([]*ethtypes.Transaction, 0, len(bdnTxs))
-
-	for _, bdnTx := range bdnTxs {
-		blockchainTx, err := h.bridge.TransactionBDNToBlockchain(bdnTx)
-		if err != nil {
-			logTransactionConverterFailure(err, bdnTx)
-			continue
-		}
-
-		ethTx, ok := blockchainTx.(*ethtypes.Transaction)
-		if !ok {
-			logTransactionConverterFailure(err, bdnTx)
-			continue
-		}
-
-		ethTxs = append(ethTxs, ethTx)
-	}
-
-	h.broadcastTransactions(ethTxs)
-}
-
-func (h *Handler) processBDNTransactionRequests(request blockchain.TransactionAnnouncement) {
-	ethTxHashes := make([]ethcommon.Hash, 0, len(request.Hashes))
-
-	for _, txHash := range request.Hashes {
-		ethTxHashes = append(ethTxHashes, ethcommon.BytesToHash(txHash[:]))
-	}
-
-	peer, ok := h.peers.get(request.PeerID)
-	if !ok {
-		log.Warnf("peer %v announced %v hashes, but is not available for querying", request.PeerID, len(ethTxHashes))
-		return
-	}
-
-	err := peer.RequestTransactions(ethTxHashes)
-	if err != nil {
-		peer.Log().Errorf("could not request %v transactions: %v", len(ethTxHashes), err)
-	}
-
-}
-
-func (h *Handler) processBDNBlock(bdnBlock *types.TbBlock) {
-	ethBlockInfo, err := h.storeBDNBlock(bdnBlock)
-	if err != nil {
-		logBlockConverterFailure(err, bdnBlock)
-		return
-	}
-
-	// nil if block is a duplicate and does not need processing
-	if ethBlockInfo == nil {
-		return
-	}
-
-	ethBlock := ethBlockInfo.Block
-	err = h.chain.SetTotalDifficulty(ethBlockInfo)
-	if err != nil {
-		log.Debugf("could not resolve difficulty for block %v, announcing instead", ethBlock.Hash())
-		h.broadcastBlockAnnouncement(ethBlock)
-	} else {
-		h.broadcastBlock(ethBlock, ethBlockInfo.TotalDifficulty(), nil)
-	}
-}
-
-func (h *Handler) processBlockchainStatusRequest() {
-	var nodes = make([]*types.NodeEndpoint, 0)
-
-	for _, peer := range h.peers.getAll() {
-		endpoint := peer.IPEndpoint()
-		nodes = append(nodes, &endpoint)
-	}
-
-	err := h.bridge.SendBlockchainStatusResponse(nodes)
-	if err != nil {
-		log.Errorf("send blockchain status response: %v", err)
-	}
-}
-
-func (h *Handler) awaitBlockResponse(peer *Peer, blockHash ethcommon.Hash, headersCh chan eth.Packet, bodiesCh chan eth.Packet, fetchResponse func(peer *Peer, blockHash ethcommon.Hash, headersCh chan eth.Packet, bodiesCh chan eth.Packet) (*eth.BlockHeadersPacket, *eth.BlockBodiesPacket, error)) {
-	startTime := time.Now()
-	headers, bodies, err := fetchResponse(peer, blockHash, headersCh, bodiesCh)
-
-	if err != nil {
-		if peer.disconnected {
-			peer.Log().Tracef("block %v response timed out for disconnected peer", blockHash)
-			return
-		}
-
-		if err == ErrInvalidPacketType {
-			// message is already logged
-		} else if err == ErrResponseTimeout {
-			peer.Log().Errorf("did not receive block header and body for block %v before timeout", blockHash)
-		} else {
-			peer.Log().Errorf("could not fetch block header and body for block %v: %v", blockHash, err)
-		}
-		peer.Disconnect(p2p.DiscUselessPeer)
-		return
-	}
-
-	elapsedTime := time.Now().Sub(startTime)
-	peer.Log().Debugf("took %v to fetch block %v header and body", elapsedTime, blockHash)
-
-	if err = h.processBlockComponents(peer, headers, bodies); err != nil {
-		log.Errorf("error processing block components for hash %v: %v", blockHash, err)
-	}
-}
-
-func (h *Handler) fetchBlockResponse66(peer *Peer, blockHash ethcommon.Hash, headersCh chan eth.Packet, bodiesCh chan eth.Packet) (*eth.BlockHeadersPacket, *eth.BlockBodiesPacket, error) {
-	var (
-		headers *eth.BlockHeadersPacket
-		bodies  *eth.BlockBodiesPacket
-		errCh   = make(chan error, 2)
-	)
-
-	go func() {
-		var ok bool
-		select {
-		case rawHeaders := <-headersCh:
-			headers, ok = rawHeaders.(*eth.BlockHeadersPacket)
-			peer.Log().Debugf("received header for block %v", blockHash)
-			if !ok {
-				log.Errorf("could not convert headers for block %v to the expected packet type, got %T", blockHash, rawHeaders)
-				errCh <- ErrInvalidPacketType
-			} else {
-				errCh <- nil
-			}
-		case <-time.After(responseTimeout):
-			errCh <- ErrResponseTimeout
-		}
-	}()
-
-	go func() {
-		var ok bool
-
-		select {
-		case rawBodies := <-bodiesCh:
-			bodies, ok = rawBodies.(*eth.BlockBodiesPacket)
-			peer.Log().Debugf("received body for block %v", blockHash)
-			if !ok {
-				log.Errorf("could not convert bodies for block %v to the expected packet type, got %T", blockHash, rawBodies)
-				errCh <- ErrInvalidPacketType
-			} else {
-				errCh <- nil
-			}
-		case <-time.After(responseTimeout):
-			errCh <- ErrResponseTimeout
-		}
-	}()
-
-	for i := 0; i < 2; i++ {
-		err := <-errCh
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	return headers, bodies, nil
-}
-
-func (h *Handler) fetchBlockResponse(peer *Peer, blockHash ethcommon.Hash, headersCh chan eth.Packet, bodiesCh chan eth.Packet) (*eth.BlockHeadersPacket, *eth.BlockBodiesPacket, error) {
-	var (
-		headers *eth.BlockHeadersPacket
-		bodies  *eth.BlockBodiesPacket
-		ok      bool
-	)
-
-	select {
-	case rawHeaders := <-headersCh:
-		headers, ok = rawHeaders.(*eth.BlockHeadersPacket)
-		if !ok {
-			log.Errorf("could not convert headers for block %v to the expected packet type, got %T", blockHash, rawHeaders)
-			return nil, nil, ErrInvalidPacketType
-		}
-	case <-time.After(responseTimeout):
-		return nil, nil, ErrResponseTimeout
-	}
-
-	peer.Log().Debugf("received header for block %v", blockHash)
-
-	select {
-	case rawBodies := <-bodiesCh:
-		bodies, ok = rawBodies.(*eth.BlockBodiesPacket)
-		if !ok {
-			log.Errorf("could not convert headers for block %v to the expected packet type, got %T", blockHash, rawBodies)
-			return nil, nil, ErrInvalidPacketType
-		}
-	case <-time.After(responseTimeout):
-		return nil, nil, ErrResponseTimeout
-	}
-
-	peer.Log().Debugf("received body for block %v", blockHash)
-
-	return headers, bodies, nil
-}
-
-func (h *Handler) processBlockComponents(peer *Peer, headers *eth.BlockHeadersPacket, bodies *eth.BlockBodiesPacket) error {
-	if len(*headers) != 1 && len(*bodies) != 1 {
-		return fmt.Errorf("received %v headers and %v bodies, instead of 1 of each", len(*headers), len(*bodies))
-	}
-
-	header := (*headers)[0]
-	body := (*bodies)[0]
-	block := ethtypes.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles)
-	blockInfo := NewBlockInfo(block, nil)
-	_ = h.chain.SetTotalDifficulty(blockInfo)
-	return h.processBlock(peer, blockInfo)
+// GetBodies assembles and returns a set of block bodies
+func (h *Handler) GetBodies(hashes []ethcommon.Hash) ([]*ethtypes.Body, error) {
+	return h.chain.GetBodies(hashes)
 }
 
 // Handle processes Ethereum message packets that update internal backend state. In general, messages that require responses should not reach this function.
@@ -324,38 +107,6 @@ func (h *Handler) Handle(peer *Peer, packet eth.Packet) error {
 		return h.processBlockHeaders(peer, *p)
 	default:
 		return fmt.Errorf("unexpected eth packet type: %v", packet)
-	}
-}
-
-func (h *Handler) broadcastTransactions(txs ethtypes.Transactions) {
-	for _, peer := range h.peers.getAll() {
-		if err := peer.SendTransactions(txs); err != nil {
-			peer.Log().Errorf("could not send %v transactions: %v", len(txs), err)
-		}
-	}
-}
-
-func (h *Handler) broadcastBlock(block *ethtypes.Block, totalDifficulty *big.Int, sourceBlockchainPeer *Peer) {
-	source := "BDN"
-	if sourceBlockchainPeer != nil {
-		source = sourceBlockchainPeer.endpoint.IPPort()
-	}
-	for _, peer := range h.peers.getAll() {
-		if peer == sourceBlockchainPeer {
-			continue
-		}
-		peer.QueueNewBlock(block, totalDifficulty)
-		peer.Log().Debugf("queuing block %v from %v", block.Hash(), source)
-	}
-}
-
-func (h *Handler) broadcastBlockAnnouncement(block *ethtypes.Block) {
-	blockHash := block.Hash()
-	number := block.NumberU64()
-	for _, peer := range h.peers.getAll() {
-		if err := peer.AnnounceBlock(blockHash, number); err != nil {
-			peer.Log().Errorf("could not announce block %v: %v", block.Hash(), err)
-		}
 	}
 }
 
@@ -425,11 +176,9 @@ func (h *Handler) validateBlock(blockHash ethcommon.Hash, blockHeight int64, blo
 func (h *Handler) processBlockAnnouncement(peer *Peer, newBlocks eth.NewBlockHashesPacket) error {
 	for _, block := range newBlocks {
 		peer.Log().Debugf("processing new block announcement %v (height %v)", block.Hash, block.Number)
-
 		if !h.chain.HasBlock(block.Hash) {
 			headersCh := make(chan eth.Packet)
 			bodiesCh := make(chan eth.Packet)
-
 			if peer.isVersion66() {
 				err := peer.RequestBlock66(block.Hash, headersCh, bodiesCh)
 				if err != nil {
@@ -451,6 +200,134 @@ func (h *Handler) processBlockAnnouncement(peer *Peer, newBlocks eth.NewBlockHas
 	}
 
 	return nil
+}
+
+func (h *Handler) awaitBlockResponse(peer *Peer, blockHash ethcommon.Hash, headersCh chan eth.Packet, bodiesCh chan eth.Packet, fetchResponse func(peer *Peer, blockHash ethcommon.Hash, headersCh chan eth.Packet, bodiesCh chan eth.Packet) (*eth.BlockHeadersPacket, *eth.BlockBodiesPacket, error)) {
+	startTime := time.Now()
+	headers, bodies, err := fetchResponse(peer, blockHash, headersCh, bodiesCh)
+	if err != nil {
+		if peer.disconnected {
+			peer.Log().Tracef("block %v response timed out for disconnected peer", blockHash)
+			return
+		}
+
+		if err == ErrInvalidPacketType {
+			// message is already logged
+		} else if err == ErrResponseTimeout {
+			peer.Log().Errorf("did not receive block header and body for block %v before timeout", blockHash)
+		} else {
+			peer.Log().Errorf("could not fetch block header and body for block %v: %v", blockHash, err)
+		}
+		peer.Disconnect(p2p.DiscUselessPeer)
+		return
+	}
+
+	elapsedTime := time.Now().Sub(startTime)
+	peer.Log().Debugf("took %v to fetch block %v header and body", elapsedTime, blockHash)
+
+	if err = h.processBlockComponents(peer, headers, bodies); err != nil {
+		log.Errorf("error processing block components for hash %v: %v", blockHash, err)
+	}
+}
+
+func (h *Handler) processBlockComponents(peer *Peer, headers *eth.BlockHeadersPacket, bodies *eth.BlockBodiesPacket) error {
+	if len(*headers) != 1 && len(*bodies) != 1 {
+		return fmt.Errorf("received %v headers and %v bodies, instead of 1 of each", len(*headers), len(*bodies))
+	}
+
+	header := (*headers)[0]
+	body := (*bodies)[0]
+	block := ethtypes.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles)
+	blockInfo := NewBlockInfo(block, nil)
+	_ = h.chain.SetTotalDifficulty(blockInfo)
+	return h.processBlock(peer, blockInfo)
+}
+
+func (h *Handler) fetchBlockResponse66(peer *Peer, blockHash ethcommon.Hash, headersCh chan eth.Packet, bodiesCh chan eth.Packet) (*eth.BlockHeadersPacket, *eth.BlockBodiesPacket, error) {
+	var (
+		headers *eth.BlockHeadersPacket
+		bodies  *eth.BlockBodiesPacket
+		errCh   = make(chan error, 2)
+	)
+
+	go func() {
+		var ok bool
+		select {
+		case rawHeaders := <-headersCh:
+			headers, ok = rawHeaders.(*eth.BlockHeadersPacket)
+			peer.Log().Debugf("received header for block %v", blockHash)
+			if !ok {
+				log.Errorf("could not convert headers for block %v to the expected packet type, got %T", blockHash, rawHeaders)
+				errCh <- ErrInvalidPacketType
+			} else {
+				errCh <- nil
+			}
+		case <-time.After(responseTimeout):
+			errCh <- ErrResponseTimeout
+		}
+	}()
+
+	go func() {
+		var ok bool
+		select {
+		case rawBodies := <-bodiesCh:
+			bodies, ok = rawBodies.(*eth.BlockBodiesPacket)
+			peer.Log().Debugf("received body for block %v", blockHash)
+			if !ok {
+				log.Errorf("could not convert bodies for block %v to the expected packet type, got %T", blockHash, rawBodies)
+				errCh <- ErrInvalidPacketType
+			} else {
+				errCh <- nil
+			}
+		case <-time.After(responseTimeout):
+			errCh <- ErrResponseTimeout
+		}
+	}()
+
+	for i := 0; i < 2; i++ {
+		err := <-errCh
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return headers, bodies, nil
+}
+
+func (h *Handler) fetchBlockResponse(peer *Peer, blockHash ethcommon.Hash, headersCh chan eth.Packet, bodiesCh chan eth.Packet) (*eth.BlockHeadersPacket, *eth.BlockBodiesPacket, error) {
+	var (
+		headers *eth.BlockHeadersPacket
+		bodies  *eth.BlockBodiesPacket
+		ok      bool
+	)
+
+	select {
+	case rawHeaders := <-headersCh:
+		headers, ok = rawHeaders.(*eth.BlockHeadersPacket)
+		if !ok {
+			log.Errorf("could not convert headers for block %v to the expected packet type, got %T", blockHash, rawHeaders)
+			return nil, nil, ErrInvalidPacketType
+		}
+	case <-time.After(responseTimeout):
+		return nil, nil, ErrResponseTimeout
+	}
+
+	peer.Log().Debugf("received header for block %v", blockHash)
+
+	select {
+	case rawBodies := <-bodiesCh:
+		bodies, ok = rawBodies.(*eth.BlockBodiesPacket)
+		if !ok {
+			log.Errorf("could not convert headers for block %v to the expected packet type, got %T", blockHash, rawBodies)
+			return nil, nil, ErrInvalidPacketType
+		}
+	case <-time.After(responseTimeout):
+		return nil, nil, ErrResponseTimeout
+	}
+
+	peer.Log().Debugf("received body for block %v", blockHash)
+
+	return headers, bodies, nil
 }
 
 func (h *Handler) processBlockHeaders(peer *Peer, blockHeaders eth.BlockHeadersPacket) error {
@@ -475,7 +352,6 @@ func (h *Handler) sendConfirmedBlocksToBDN(count int, peerEndpoint types.NodeEnd
 	// iterate in reverse to send all new heads in ascending order to BDN
 	for i := len(newHeads) - 1; i >= 0; i-- {
 		newHead := newHeads[i]
-
 		bdnBlock, err := h.bridge.BlockBlockchainToBDN(newHead)
 		if err != nil {
 			log.Errorf("could not convert block: %v", err)
@@ -491,7 +367,7 @@ func (h *Handler) sendConfirmedBlocksToBDN(count int, peerEndpoint types.NodeEnd
 
 	b, err := h.blockAtDepth(h.config.BlockConfirmationsCount)
 	if err != nil {
-		log.Debugf("cannot retrieve bxblock at depth %v, %v", h.config.BlockConfirmationsCount, err)
+		log.Debugf("cannot retrieve block at depth %v, %v", h.config.BlockConfirmationsCount, err)
 		return
 	}
 	blockHash := ethcommon.BytesToHash(b.Hash().Bytes())
@@ -500,7 +376,7 @@ func (h *Handler) sendConfirmedBlocksToBDN(count int, peerEndpoint types.NodeEnd
 		log.Debugf("cannot retrieve block metadata at depth %v, with hash %v", h.config.BlockConfirmationsCount, blockHash)
 		return
 	}
-	if metadata.cnfMsgSent {
+	if metadata.confirmedMsgSent {
 		log.Debugf("block %v has already been sent in a block confirm message to gateway", b.Hash())
 		return
 	}
@@ -513,17 +389,94 @@ func (h *Handler) sendConfirmedBlocksToBDN(count int, peerEndpoint types.NodeEnd
 	h.chain.storeBlockMetadata(blockHash, metadata.height, metadata.confirmed, true)
 }
 
-// GetHeaders assembles and returns a set of headers
-func (h *Handler) GetHeaders(start eth.HashOrNumber, count int, skip int, reverse bool) ([]*ethtypes.Header, error) {
-	return h.chain.GetHeaders(start, count, skip, reverse)
+func (h *Handler) handleBDNBridge(ctx context.Context) {
+	for {
+		select {
+		case bdnTxs := <-h.bridge.ReceiveBDNTransactions():
+			h.processBDNTransactions(bdnTxs)
+		case request := <-h.bridge.ReceiveTransactionHashesRequest():
+			h.processBDNTransactionRequests(request)
+		case bdnBlock := <-h.bridge.ReceiveBlockFromBDN():
+			h.processBDNBlock(bdnBlock)
+		case config := <-h.bridge.ReceiveNetworkConfigUpdates():
+			h.config.Update(config)
+		case <-h.bridge.ReceiveBlockchainStatusRequest():
+			h.processBlockchainStatusRequest()
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
-// GetBodies assembles and returns a set of block bodies
-func (h *Handler) GetBodies(hashes []ethcommon.Hash) ([]*ethtypes.Body, error) {
-	return h.chain.GetBodies(hashes)
+func (h *Handler) processBDNTransactions(bdnTxs []*types.TbTransaction) {
+	ethTxs := make([]*ethtypes.Transaction, 0, len(bdnTxs))
+	for _, bdnTx := range bdnTxs {
+		blockchainTx, err := h.bridge.TransactionBDNToBlockchain(bdnTx)
+		if err != nil {
+			logTransactionConverterFailure(err, bdnTx)
+			continue
+		}
+
+		ethTx, ok := blockchainTx.(*ethtypes.Transaction)
+		if !ok {
+			logTransactionConverterFailure(err, bdnTx)
+			continue
+		}
+
+		ethTxs = append(ethTxs, ethTx)
+	}
+
+	h.broadcastTransactions(ethTxs)
 }
 
-// storeBDNBlock will return a nil block and no error if block is a duplicate
+func (h *Handler) broadcastTransactions(txs ethtypes.Transactions) {
+	for _, peer := range h.peers.getAll() {
+		if err := peer.SendTransactions(txs); err != nil {
+			peer.Log().Errorf("could not send %v transactions: %v", len(txs), err)
+		}
+	}
+}
+
+func (h *Handler) processBDNTransactionRequests(request blockchain.TransactionAnnouncement) {
+	ethTxHashes := make([]ethcommon.Hash, 0, len(request.Hashes))
+	for _, txHash := range request.Hashes {
+		ethTxHashes = append(ethTxHashes, ethcommon.BytesToHash(txHash[:]))
+	}
+
+	peer, ok := h.peers.get(request.PeerID)
+	if !ok {
+		log.Warnf("peer %v announced %v hashes, but is not available for querying", request.PeerID, len(ethTxHashes))
+		return
+	}
+
+	err := peer.RequestTransactions(ethTxHashes)
+	if err != nil {
+		peer.Log().Errorf("could not request %v transactions: %v", len(ethTxHashes), err)
+	}
+}
+
+func (h *Handler) processBDNBlock(bdnBlock *types.TbBlock) {
+	ethBlockInfo, err := h.storeBDNBlock(bdnBlock)
+	if err != nil {
+		logBlockConverterFailure(err, bdnBlock)
+		return
+	}
+
+	// nil if block is a duplicate and does not need processing
+	if ethBlockInfo == nil {
+		return
+	}
+
+	ethBlock := ethBlockInfo.Block
+	err = h.chain.SetTotalDifficulty(ethBlockInfo)
+	if err != nil {
+		log.Debugf("could not resolve difficulty for block %v, announcing instead", ethBlock.Hash())
+		h.broadcastBlockAnnouncement(ethBlock)
+	} else {
+		h.broadcastBlock(ethBlock, ethBlockInfo.TotalDifficulty(), nil)
+	}
+}
+
 func (h *Handler) storeBDNBlock(bdnBlock *types.TbBlock) (*BlockInfo, error) {
 	blockHash := ethcommon.BytesToHash(bdnBlock.Hash().Bytes())
 	if h.chain.HasBlock(blockHash) {
@@ -545,6 +498,59 @@ func (h *Handler) storeBDNBlock(bdnBlock *types.TbBlock) (*BlockInfo, error) {
 
 	h.chain.AddBlock(ethBlockInfo, BSBDN)
 	return ethBlockInfo, nil
+}
+
+func (h *Handler) processBlockchainStatusRequest() {
+	var nodes = make([]*types.NodeEndpoint, 0)
+
+	for _, peer := range h.peers.getAll() {
+		endpoint := peer.IPEndpoint()
+		nodes = append(nodes, &endpoint)
+	}
+
+	err := h.bridge.SendBlockchainStatusResponse(nodes)
+	if err != nil {
+		log.Errorf("send blockchain status response: %v", err)
+	}
+}
+
+func (h *Handler) broadcastBlock(block *ethtypes.Block, totalDifficulty *big.Int, sourceBlockchainPeer *Peer) {
+	source := "BDN"
+	if sourceBlockchainPeer != nil {
+		source = sourceBlockchainPeer.endpoint.IPPort()
+	}
+	for _, peer := range h.peers.getAll() {
+		if peer == sourceBlockchainPeer {
+			continue
+		}
+		peer.QueueNewBlock(block, totalDifficulty)
+		peer.Log().Debugf("queuing block %v from %v", block.Hash(), source)
+	}
+}
+
+func (h *Handler) broadcastBlockAnnouncement(block *ethtypes.Block) {
+	blockHash := block.Hash()
+	number := block.NumberU64()
+	for _, peer := range h.peers.getAll() {
+		if err := peer.AnnounceBlock(blockHash, number); err != nil {
+			peer.Log().Errorf("could not announce block %v: %v", block.Hash(), err)
+		}
+	}
+}
+
+func (h *Handler) blockAtDepth(chainDepth int) (*types.TbBlock, error) {
+	block, err := h.chain.BlockAtDepth(chainDepth)
+	if err != nil {
+		log.Debugf("cannot retrieve block with chain depth %v, %v", chainDepth, err)
+		return nil, err
+	}
+	blockInfo := NewBlockInfo(block, block.Header().Difficulty)
+	tbBlock, err := h.bridge.BlockBlockchainToBDN(blockInfo)
+	if err != nil {
+		log.Debugf("cannot convert eth block to BDN block at the chain depth %v with hash %v, %v", chainDepth, block.Hash(), err)
+		return nil, err
+	}
+	return tbBlock, err
 }
 
 func (h *Handler) checkInitialBlockchainLiveliness(initialLivelinessCheckDelay time.Duration) {
@@ -582,19 +588,4 @@ func logBlockConverterFailure(err error, bdnBlock *types.TbBlock) {
 		blockHex = hexutil.Encode(b)
 	}
 	log.Errorf("could not convert block (hash: %v) from BDN to Ethereum block: %v. contents: %v", bdnBlock.Hash(), err, blockHex)
-}
-
-func (h *Handler) blockAtDepth(chainDepth int) (*types.TbBlock, error) {
-	block, err := h.chain.BlockAtDepth(chainDepth)
-	if err != nil {
-		log.Debugf("cannot retrieve block with chain depth %v, %v", chainDepth, err)
-		return nil, err
-	}
-	blockInfo := NewBlockInfo(block, block.Header().Difficulty)
-	bxBlock, err := h.bridge.BlockBlockchainToBDN(blockInfo)
-	if err != nil {
-		log.Debugf("cannot convert eth block to BDN block at the chain depth %v with hash %v, %v", chainDepth, block.Hash(), err)
-		return nil, err
-	}
-	return bxBlock, err
 }

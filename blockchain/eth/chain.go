@@ -24,25 +24,20 @@ const (
 	defaultCleanInterval = 30 * time.Minute
 )
 
-// Chain represents and stores blockchain state in memory
+// Chain represents blockchain state in memory
 type Chain struct {
 	chainLock  sync.RWMutex // lock for updating chain state
 	headerLock sync.RWMutex // lock for block headers/heights
-
 	// if reconciling a fork takes longer than this value, then trim the chain to this length
 	maxReorg int
-
 	// if a missing block is preventing updating the chain head, once a valid chain of this length is possible, discard the old chain
-	minValidChain int
-
+	minValidChain         int
 	heightToBlockHeaders  cmap.ConcurrentMap
 	blockHashToMetadata   cmap.ConcurrentMap
 	blockHashToBody       cmap.ConcurrentMap
 	blockHashToDifficulty cmap.ConcurrentMap
-
-	chainState blockRefChain
-
-	clock utils.RealClock
+	chainState            blockRefChain
+	clock                 utils.RealClock
 }
 
 // BlockSource indicates the origin of a block message
@@ -83,10 +78,10 @@ func (e BlockInfo) TotalDifficulty() *big.Int {
 }
 
 type blockMetadata struct {
-	height     uint64
-	sentToBDN  bool
-	confirmed  bool
-	cnfMsgSent bool
+	height           uint64
+	sentToBDN        bool
+	confirmed        bool
+	confirmedMsgSent bool
 }
 
 type ethHeader struct {
@@ -129,7 +124,7 @@ func (c *Chain) cleanBlockStorage(ctx context.Context, cleanInterval time.Durati
 }
 
 // AddBlock adds the provided block from the source into storage, updating the chain state if the block comes from a reliable source.
-// AddBlock returns the number of new canonical hashes added to the head if a reorganization happened.
+// It returns the number of new canonical hashes added to the head if a reorganization happened.
 func (c *Chain) AddBlock(b *BlockInfo, source BlockSource) int {
 	c.chainLock.Lock()
 	defer c.chainLock.Unlock()
@@ -314,11 +309,10 @@ func (c *Chain) GetHeaders(start eth.HashOrNumber, count int, skip int, reverse 
 	c.chainLock.RLock()
 	defer c.chainLock.RUnlock()
 
-	requestedHeaders := make([]*ethtypes.Header, 0, count)
-
 	var (
-		originHash   ethcommon.Hash
-		originHeight uint64
+		originHash       ethcommon.Hash
+		originHeight     uint64
+		requestedHeaders = make([]*ethtypes.Header, 0, count)
 	)
 
 	// figure out query scheme, then initialize requested headers with the first entry
@@ -371,7 +365,6 @@ func (c *Chain) GetHeaders(start eth.HashOrNumber, count int, skip int, reverse 
 	increment := (skip + 1) * directionalMultiplier
 
 	nextHeight := int(originHeight) + increment
-	// iterate through all requested headers and fetch results
 	for height := nextHeight; len(requestedHeaders) < count; height += increment {
 		header, err := c.getHeaderAtHeight(uint64(height))
 		if err != nil {
@@ -407,7 +400,6 @@ func (c *Chain) BlockAtDepth(chainDepth int) (*ethtypes.Block, error) {
 	return block, nil
 }
 
-// should be called with c.chainLock held
 func (c *Chain) updateChainState(height uint64, hash ethcommon.Hash, parentHash ethcommon.Hash) int {
 	if len(c.chainState) == 0 {
 		c.chainState = append(c.chainState, blockRef{
@@ -418,7 +410,6 @@ func (c *Chain) updateChainState(height uint64, hash ethcommon.Hash, parentHash 
 	}
 
 	chainHead := c.chainState[0]
-
 	// canonical block, append immediately
 	if chainHead.height+1 == height && chainHead.hash == parentHash {
 		c.chainState = append([]blockRef{{height, hash}}, c.chainState...)
@@ -494,7 +485,6 @@ func (c *Chain) updateChainState(height uint64, hash ethcommon.Hash, parentHash 
 	return len(missingEntries)
 }
 
-// fetches correct header from chain, not store (require lock?)
 func (c *Chain) getHeaderAtHeight(height uint64) (*ethtypes.Header, error) {
 	if len(c.chainState) == 0 {
 		return nil, fmt.Errorf("%v: no header at height %v", c.chainState, height)
@@ -554,12 +544,12 @@ func (c *Chain) getBlockMetadata(hash ethcommon.Hash) (blockMetadata, bool) {
 	return bm.(blockMetadata), ok
 }
 
-func (c *Chain) storeBlockMetadata(hash ethcommon.Hash, height uint64, confirmed bool, cnfMsgSent bool) {
-	set := c.blockHashToMetadata.SetIfAbsent(hash.String(), blockMetadata{height, false, confirmed, cnfMsgSent})
+func (c *Chain) storeBlockMetadata(hash ethcommon.Hash, height uint64, confirmed bool, confirmedMsgSent bool) {
+	set := c.blockHashToMetadata.SetIfAbsent(hash.String(), blockMetadata{height, false, confirmed, confirmedMsgSent})
 	if !set {
 		bm, _ := c.getBlockMetadata(hash)
 		bm.confirmed = bm.confirmed || confirmed
-		bm.cnfMsgSent = bm.cnfMsgSent || cnfMsgSent
+		bm.confirmedMsgSent = bm.confirmedMsgSent || confirmedMsgSent
 		c.blockHashToMetadata.Set(hash.String(), bm)
 	}
 }
@@ -581,7 +571,6 @@ func (c *Chain) getHeadersAtHeight(height uint64) ([]*ethtypes.Header, bool) {
 
 	ethHeaders := rawHeaders.([]ethHeader)
 	headers := make([]*ethtypes.Header, 0, len(ethHeaders))
-
 	for _, eh := range ethHeaders {
 		headers = append(headers, eh.Header)
 	}
@@ -596,14 +585,12 @@ func (c *Chain) storeHeaderAtHeight(height uint64, header *ethtypes.Header) {
 	c.storeEthHeaderAtHeight(height, eh)
 }
 
-// generally avoid calling this function directly
 func (c *Chain) storeEthHeaderAtHeight(height uint64, eh ethHeader) {
 	// concurrent calls to this function are ok, only needs to be exclusionary with clean
 	c.headerLock.RLock()
 	defer c.headerLock.RUnlock()
 
 	heightStr := strconv.FormatUint(height, 10)
-
 	ok := c.heightToBlockHeaders.SetIfAbsent(heightStr, []ethHeader{eh})
 	if !ok {
 		rawHeaders, _ := c.heightToBlockHeaders.Get(heightStr)
@@ -651,7 +638,6 @@ func (c *Chain) removeBlockBody(hash ethcommon.Hash) {
 	c.blockHashToBody.Remove(hash.String())
 }
 
-// removes all info corresponding to a given block in storage
 func (c *Chain) pruneHash(hash ethcommon.Hash) {
 	c.removeBlockMetadata(hash)
 	c.removeBlockBody(hash)
@@ -680,20 +666,19 @@ func (c *Chain) clean(maxSize int) (lowestCleaned int, highestCleaned int, numCl
 	numHeadersStored := c.heightToBlockHeaders.Count()
 
 	if numHeadersStored >= maxSize {
-		for elem := range c.heightToBlockHeaders.IterBuffered() {
-			heightStr := elem.Key
+		for item := range c.heightToBlockHeaders.IterBuffered() {
+			heightStr := item.Key
 			height, err := strconv.Atoi(heightStr)
 			if err != nil {
 				log.Errorf("failed to convert height %v from string to integer: %v", heightStr, err)
 				continue
 			}
 			if height < minHeight {
-				headers := elem.Val.([]ethHeader)
+				headers := item.Val.([]ethHeader)
 				c.heightToBlockHeaders.Remove(heightStr)
 				for _, header := range headers {
 					hash := header.hash
 					c.pruneHash(hash)
-
 					numCleaned++
 					if height < lowestCleaned {
 						lowestCleaned = height
@@ -710,7 +695,6 @@ func (c *Chain) clean(maxSize int) (lowestCleaned int, highestCleaned int, numCl
 			chainStatePruned = len(c.chainState) - maxSize
 			c.chainState = c.chainState[:maxSize]
 		}
-
 		log.Debugf("cleaned block storage (previous size %v out of max %v): %v block headers from %v to %v, pruning %v elements off of chainstate", numHeadersStored, maxSize, numCleaned, lowestCleaned, highestCleaned, chainStatePruned)
 	} else {
 		log.Debugf("skipping block storage cleanup, only had %v block headers out of a limit of %v", numHeadersStored, maxSize)

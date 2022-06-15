@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package turbo.v1;
+option go_package = "github.com/massbitprotocol/turbo/pb/turbo/v1;pbturbo";
+
+import "google/protobuf/timestamp.proto";
+
+service Relay {
+
+}

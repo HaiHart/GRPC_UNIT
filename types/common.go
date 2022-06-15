@@ -84,18 +84,3 @@ type NetworkNum uint32
 
 // NetworkNumLen is the byte length of packed network numbers
 const NetworkNumLen = UInt32Len
-
-// BloxrouteAccountID marks an internally generated certificate (e.g. for relays / internal gateways)
-const BloxrouteAccountID = "bloXroute LABS"
-
-// BloxrouteGoGateway is initiated in gateway node model for the field: name
-const BloxrouteGoGateway = "bloxroute go gateway"
-
-// GoGatewayVersion is version of gateway
-const GoGatewayVersion = "2.0.1"
-
-// AllNetworkNum is the network number for relays that facilitate transactions from all networks
-const AllNetworkNum NetworkNum = 0
-
-// ErrorNotificationCodeLen represents len of code
-const ErrorNotificationCodeLen = 4

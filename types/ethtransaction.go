@@ -274,7 +274,7 @@ type EthAddress struct {
 	*common.Address
 }
 
-// MarshalJSON formats an EthAddress according to the bloxroute spec
+// MarshalJSON formats an EthAddress according to the  spec
 func (a EthAddress) MarshalJSON() ([]byte, error) {
 	if a.Address == nil {
 		return json.Marshal("0x")
@@ -302,7 +302,7 @@ func (bi EthBigInt) GreaterThanOrEqualTo(other EthBigInt) bool {
 	return bi.Int.Cmp(other.Int) != -1
 }
 
-// MarshalJSON formats an big.Int according to the bloxroute spec
+// MarshalJSON formats an big.Int according to the  spec
 func (bi EthBigInt) MarshalJSON() ([]byte, error) {
 	if bi.Int != nil {
 		return json.Marshal(strings.ToLower(hexutil.EncodeBig(bi.Int)))
@@ -315,7 +315,7 @@ type EthUInt64 struct {
 	UInt64 uint64
 }
 
-// MarshalJSON formats an uint64 according to the bloxroute spec
+// MarshalJSON formats an uint64 according to the  spec
 func (ui EthUInt64) MarshalJSON() ([]byte, error) {
 	return json.Marshal(strings.ToLower(hexutil.EncodeUint64(ui.UInt64)))
 }
@@ -335,7 +335,7 @@ type EthUInt8 struct {
 	UInt8 uint8
 }
 
-// MarshalJSON formats an uint8 according to the bloxroute spec
+// MarshalJSON formats an uint8 according to the  spec
 func (ui EthUInt8) MarshalJSON() ([]byte, error) {
 	return json.Marshal(strings.ToLower(hexutil.EncodeUint64(uint64(ui.UInt8))))
 }
@@ -350,7 +350,7 @@ func (ui EthUInt8) GreaterThan(other EthUInt8) bool {
 	return ui.UInt8 > other.UInt8
 }
 
-// MarshalJSON formats an EthTransactionType according to the bloxroute spec
+// MarshalJSON formats an EthTransactionType according to the  spec
 func (ui EthTransactionType) MarshalJSON() ([]byte, error) {
 	return json.Marshal(strings.ToLower(hexutil.EncodeUint64(uint64(ui.UInt8))))
 }
@@ -360,7 +360,7 @@ type EthBytes struct {
 	B []byte
 }
 
-// MarshalJSON formats an wrapped []byte according to the bloxroute spec
+// MarshalJSON formats an wrapped []byte according to the  spec
 func (eb EthBytes) MarshalJSON() ([]byte, error) {
 	return json.Marshal(strings.ToLower(hexutil.Encode(eb.B)))
 }
@@ -370,12 +370,12 @@ type EthHash struct {
 	SHA256Hash
 }
 
-// MarshalJSON formats an wrapped SHA256Hash according to the bloxroute spec
+// MarshalJSON formats an wrapped SHA256Hash according to the  spec
 func (eh EthHash) MarshalJSON() ([]byte, error) {
 	return json.Marshal(strings.ToLower(eh.SHA256Hash.Format(true)))
 }
 
-// MarshalJSON formats an ethTxJSON according to the bloxroute spec via EthTransaction
+// MarshalJSON formats an ethTxJSON according to the  spec via EthTransaction
 func (et EthTransaction) MarshalJSON() ([]byte, error) {
 	var enc ethTxJSON
 

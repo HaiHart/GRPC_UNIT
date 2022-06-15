@@ -79,7 +79,7 @@ func (l *nonBlocking) AvoidChannel() {
 }
 
 // Logf - main log function
-func (l nonBlocking) Logf(level Level, fields *Fields, format string, args ...interface{}) {
+func (l *nonBlocking) Logf(level Level, fields *Fields, format string, args ...interface{}) {
 	if !IsLevelEnabled(level) {
 		return
 	}
@@ -103,7 +103,7 @@ func (l nonBlocking) Logf(level Level, fields *Fields, format string, args ...in
 	}
 }
 
-func (l nonBlocking) Log(level Level, fields *Fields, a ...interface{}) {
+func (l *nonBlocking) Log(level Level, fields *Fields, a ...interface{}) {
 	if !IsLevelEnabled(level) {
 		return
 	}

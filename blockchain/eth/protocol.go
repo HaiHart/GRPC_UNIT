@@ -31,14 +31,14 @@ func makeProtocol(ctx context.Context, backend Backend, version uint, versionLen
 		Length:  versionLength,
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 			ep := NewPeer(ctx, p, rw, version)
-
 			config := backend.NetworkConfig()
+
 			peerStatus, err := ep.Handshake(uint32(version), config.Network, config.TotalDifficulty, config.Head, config.Genesis)
 			if err != nil {
 				return err
 			}
 
-			// process status message on backend to set initial total difficulty
+			// process status message to set initial total difficulty
 			_ = backend.Handle(ep, peerStatus)
 
 			return backend.RunPeer(ep, func(peer *Peer) error {
@@ -75,7 +75,7 @@ var eth65 = map[uint64]msgHandler{
 	eth.GetReceiptsMsg:                handleUnimplemented,
 	eth.ReceiptsMsg:                   handleUnimplemented,
 	eth.NewBlockHashesMsg:             handleNewBlockHashes,
-	eth.NewBlockMsg:                   handleNewBlockMsg,
+	eth.NewBlockMsg:                   handleNewBlock,
 	eth.TransactionsMsg:               handleTransactions,
 	eth.NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
 	eth.GetPooledTransactionsMsg:      handleUnimplemented,
@@ -84,7 +84,7 @@ var eth65 = map[uint64]msgHandler{
 
 var eth66 = map[uint64]msgHandler{
 	eth.NewBlockHashesMsg:             handleNewBlockHashes,
-	eth.NewBlockMsg:                   handleNewBlockMsg,
+	eth.NewBlockMsg:                   handleNewBlock,
 	eth.TransactionsMsg:               handleTransactions,
 	eth.NewPooledTransactionHashesMsg: handleNewPooledTransactionHashes,
 	// eth66 messages have request-id

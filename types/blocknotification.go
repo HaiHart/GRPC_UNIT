@@ -35,7 +35,7 @@ type Header struct {
 	BaseFee          *int           `json:"baseFeePerGas,omitempty"`
 }
 
-// ConvertEthHeaderToBlockNotificationHeader converts Ethereum header to bloxroute Ethereum Header
+// ConvertEthHeaderToBlockNotificationHeader converts Ethereum header to Turbo Ethereum Header
 func ConvertEthHeaderToBlockNotificationHeader(ethHeader *ethtypes.Header) *Header {
 	newHeader := Header{
 		ParentHash:       ethHeader.ParentHash,

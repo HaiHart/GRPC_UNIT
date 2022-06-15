@@ -347,6 +347,7 @@ func (ep *Peer) NotifyResponse66(requestID uint64, packet eth.Packet) (bool, err
 	if responseCh != nil {
 		responseCh <- packet
 	}
+
 	return responseCh != nil, nil
 }
 
@@ -472,7 +473,7 @@ func (ep *Peer) RequestBlock66(blockHash common.Hash, headersCh chan eth.Packet,
 	}
 
 	ep.registerForResponse66(getHeadersRequestID, headersCh)
-	ep.registerForResponse66(getBodiesRequestID, headersCh)
+	ep.registerForResponse66(getBodiesRequestID, bodiesCh)
 
 	if err := ep.send(eth.GetBlockHeadersMsg, getHeadersPacket66); err != nil {
 		return err
@@ -496,17 +497,16 @@ func (ep *Peer) RequestBlockHeaderRaw(origin eth.HashOrNumber, amount, skip uint
 		Skip:    skip,
 		Reverse: reverse,
 	}
+
 	if ep.isVersion66() {
 		requestID := rand.Uint64()
 		ep.registerForResponse66(requestID, responseCh)
-
 		return ep.send(eth.GetBlockHeadersMsg, eth.GetBlockHeadersPacket66{
 			RequestId:             requestID,
 			GetBlockHeadersPacket: &packet,
 		})
 	}
 
-	// intercept and discard handler on response
 	ep.registerForResponse(responseCh)
 	return ep.send(eth.GetBlockHeadersMsg, packet)
 }

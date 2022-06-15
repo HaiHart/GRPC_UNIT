@@ -25,11 +25,11 @@ func NewTurboConfigFromCLI(ctx *cli.Context) (*TurboConfig, error) {
 		return nil, err
 	}
 
-	turboConfig := &TurboConfig{
+	config := &TurboConfig{
 		Env:        env,
 		Config:     log,
 		TxTraceLog: txTraceLog,
 	}
 
-	return turboConfig, nil
+	return config, nil
 }

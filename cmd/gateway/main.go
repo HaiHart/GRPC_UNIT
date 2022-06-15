@@ -9,6 +9,7 @@ import (
 	"github.com/massbitprotocol/turbo/blockchain/network"
 	"github.com/massbitprotocol/turbo/config"
 	log "github.com/massbitprotocol/turbo/logger"
+	"github.com/massbitprotocol/turbo/nodes"
 	"github.com/massbitprotocol/turbo/types"
 	"github.com/massbitprotocol/turbo/utils"
 	"github.com/massbitprotocol/turbo/version"
@@ -83,17 +84,28 @@ func runGateway(c *cli.Context) error {
 			PublicKey: enodePublicKey,
 		})
 	}
-	startupBlockchainClient := len(blockchainPeers) > 0
 
 	err = log.Init(turboConfig.Config, version.BuildVersion)
 	if err != nil {
 		return err
 	}
 
-	bridge := blockchain.NewBxBridge(eth.Converter{})
+	bridge := blockchain.NewTurboBridge(eth.Converter{})
+
+	gateway, err := nodes.NewGateway(ctx, turboConfig, bridge, blockchainPeers, ethConfig.StaticPeers)
+	if err != nil {
+		return err
+	}
+	go func() {
+		err = gateway.Run()
+		if err != nil {
+			log.Errorf("closing gateway with err %v", err)
+			log.Exit(0)
+		}
+	}()
 
 	var blockchainServer *eth.Server
-	if startupBlockchainClient {
+	if len(blockchainPeers) > 0 {
 		log.Infof("starting blockchain client with config for network ID: %v", ethConfig.Network)
 
 		blockchainServer, err = eth.NewServerWithEthLogger(ctx, ethConfig, bridge, c.String(utils.DataDirFlag.Name))
