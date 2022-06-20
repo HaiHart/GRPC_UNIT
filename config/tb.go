@@ -8,6 +8,8 @@ import (
 
 // TurboConfig represent generic node configuration
 type TurboConfig struct {
+	NodeType utils.NodeType
+
 	*Env
 	*logger.Config
 	*TxTraceLog
@@ -25,7 +27,13 @@ func NewTurboConfigFromCLI(ctx *cli.Context) (*TurboConfig, error) {
 		return nil, err
 	}
 
+	nodeType, err := utils.FromStringToNodeType(ctx.String(utils.NodeTypeFlag.Name))
+	if err != nil {
+		return nil, err
+	}
+
 	config := &TurboConfig{
+		NodeType:   nodeType,
 		Env:        env,
 		Config:     log,
 		TxTraceLog: txTraceLog,

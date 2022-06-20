@@ -71,4 +71,9 @@ var (
 		Usage: "for gateways only, sets max number of backup tx trace log files retained (0 enables unlimited backups)",
 		Value: 3,
 	}
+	NodeTypeFlag = &cli.StringFlag{
+		Name:  "node-type",
+		Usage: "set node type",
+		Value: "gateway",
+	}
 )

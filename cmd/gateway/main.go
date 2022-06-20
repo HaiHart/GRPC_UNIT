@@ -36,6 +36,7 @@ func main() {
 			utils.TxTraceEnabledFlag,
 			utils.TxTraceMaxFileSizeFlag,
 			utils.TxTraceMaxBackupFilesFlag,
+			utils.NodeTypeFlag,
 			utils.BlockchainNetworkFlag,
 			utils.EnodesFlag,
 			utils.MultiNode,

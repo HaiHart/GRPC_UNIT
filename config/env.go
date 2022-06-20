@@ -11,6 +11,7 @@ const (
 
 // Env represents configuration pertaining to a specific development environment
 type Env struct {
+	DataDir     string
 	Environment string
 }
 
