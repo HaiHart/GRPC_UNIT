@@ -10,7 +10,7 @@ import (
 func main() {
 	log.SetFlags(log.Lshortfile)
 
-	cer, err := tls.LoadX509KeyPair("certs/gateway_cert.pem", "certs/gateway_key.pem")
+	cer, err := tls.LoadX509KeyPair("datadir/gateway/private/gateway_cert.pem", "datadir/gateway/private/gateway_key.pem")
 	if err != nil {
 		log.Println(err)
 		return
@@ -45,11 +45,5 @@ func handleConnection(conn net.Conn) {
 		}
 
 		println(msg)
-
-		n, err := conn.Write([]byte("world\n"))
-		if err != nil {
-			log.Println(n, err)
-			return
-		}
 	}
 }

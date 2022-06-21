@@ -23,7 +23,7 @@ const (
 	maxFutureBlockNumber = 100
 )
 
-// Backend represents the interface to which any stateful message handling (e.g. looking up tx pool items or block headers) will be passed to for processing
+// Backend represents the interface to which any stateful message handling will be passed to for processing
 type Backend interface {
 	NetworkConfig() *network.EthConfig
 	RunPeer(peer *Peer, handler func(*Peer) error) error
@@ -40,6 +40,8 @@ type Handler struct {
 	config *network.EthConfig
 	chain  *Chain
 }
+
+var _ Backend = (*Handler)(nil)
 
 // NewHandler returns a new Handler and starts its processing goroutines
 func NewHandler(parent context.Context, bridge blockchain.Bridge, config *network.EthConfig) *Handler {
@@ -95,19 +97,20 @@ func (h *Handler) Handle(peer *Peer, packet eth.Packet) error {
 		return nil
 	case *eth.TransactionsPacket:
 		return h.processTransactions(peer, *p)
-	case *eth.PooledTransactionsPacket:
-		return h.processTransactions(peer, *p)
-	case *eth.NewPooledTransactionHashesPacket:
-		return h.processTransactionHashes(peer, *p)
-	case *eth.NewBlockPacket:
-		return h.processBlock(peer, NewBlockInfo(p.Block, p.TD))
-	case *eth.NewBlockHashesPacket:
-		return h.processBlockAnnouncement(peer, *p)
-	case *eth.BlockHeadersPacket:
-		return h.processBlockHeaders(peer, *p)
+	//case *eth.PooledTransactionsPacket:
+	//	return h.processTransactions(peer, *p)
+	//case *eth.NewPooledTransactionHashesPacket:
+	//	return h.processTransactionHashes(peer, *p)
+	//case *eth.NewBlockPacket:
+	//	return h.processBlock(peer, NewBlockInfo(p.Block, p.TD))
+	//case *eth.NewBlockHashesPacket:
+	//	return h.processBlockAnnouncement(peer, *p)
+	//case *eth.BlockHeadersPacket:
+	//	return h.processBlockHeaders(peer, *p)
 	default:
-		return fmt.Errorf("unexpected eth packet type: %v", packet)
+		//return fmt.Errorf("unexpected eth packet type: %v", packet)
 	}
+	return nil
 }
 
 func (h *Handler) processTransactions(peer *Peer, txs []*ethtypes.Transaction) error {

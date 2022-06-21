@@ -206,7 +206,7 @@ func (c *Chain) GetNewHeadsForBDN(count int) ([]*BlockInfo, error) {
 		}
 
 		block := ethtypes.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles)
-		// ok for difficulty to not be found since not always available
+		// it's ok for difficulty to not be found since it not always available
 		td, _ := c.getBlockDifficulty(head.hash)
 
 		heads = append(heads, NewBlockInfo(block, td))

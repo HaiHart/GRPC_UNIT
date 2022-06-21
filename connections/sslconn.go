@@ -122,7 +122,14 @@ func (s *SSLConn) ID() Socket {
 
 // Info returns connection details, include details parsed from certificates
 func (s *SSLConn) Info() Info {
-	return Info{}
+	return Info{
+		PeerIP:          s.ip,
+		PeerPort:        s.port,
+		LocalPort:       LocalInitiatedPort,
+		ConnectionType:  utils.RelayTransaction,
+		ConnectionState: "",
+		NetworkNum:      1,
+	}
 }
 
 // IsOpen indicates whether the socket connection is open
@@ -222,12 +229,33 @@ func (s *SSLConn) readWithDeadline(buf []byte, deadline time.Duration) (int, err
 
 // Send sends messages over the wire to the peer node
 func (s *SSLConn) Send(msg tbmessage.Message) error {
+	var err error
+	if s.Socket == nil {
+		err = fmt.Errorf("trying to send a message to connection before it's connected")
+		s.Log().Debug(err)
+		return err
+	}
+	if !s.connectionOpen {
+		// note - can't use s.String() or s.s.RemoteAddr()  here since RemoteAddr() may produce nil
+		err = fmt.Errorf("trying to send a message to %v:%v while it is closed", s.ip, s.port)
+		s.Log().Debug(err)
+		return err
+	}
+	s.queueToMessageChan(msg)
 	return nil
 }
 
 // SendWithDelay sends messages over the wire to the peer node after waiting the requests delay
 func (s *SSLConn) SendWithDelay(msg tbmessage.Message, delay time.Duration) error {
 	return nil
+}
+
+func (s *SSLConn) queueToMessageChan(msg tbmessage.Message) {
+	select {
+	case s.sendMessages <- msg:
+	default:
+		_ = s.Close("cannot place message on channel without blocking")
+	}
 }
 
 // Disable marks the connection as disabled, meaning it sends/processes only ping/pong messages. Must be called in a go routine.
@@ -247,6 +275,11 @@ func (s SSLConn) String() string {
 		return fmt.Sprintf("%v:%v", s.ip, s.port)
 	}
 	return s.Socket.RemoteAddr().String()
+}
+
+// isInitiator returns whether this node initiated the connection
+func (s *SSLConn) isInitiator() bool {
+	return s.port != RemoteInitiatedPort
 }
 
 // close should only be called when s.lock is already held

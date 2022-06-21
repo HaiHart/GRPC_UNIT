@@ -9,6 +9,7 @@ import (
 	"github.com/massbitprotocol/turbo/connections"
 	"github.com/massbitprotocol/turbo/connections/handler"
 	log "github.com/massbitprotocol/turbo/logger"
+	"github.com/massbitprotocol/turbo/tbmessage"
 	"github.com/massbitprotocol/turbo/types"
 	"github.com/massbitprotocol/turbo/utils"
 	"golang.org/x/sync/errgroup"
@@ -81,7 +82,7 @@ func (g *gateway) Run() error {
 	go g.handleRelayConnections(relayInstructions, sslCerts)
 	relayInstructions <- connections.RelayInstruction{
 		IP:   "127.0.0.1",
-		Type: 0,
+		Type: connections.Connect,
 		Port: 443,
 	}
 
@@ -109,11 +110,52 @@ func (g *gateway) connectRelay(instruction connections.RelayInstruction, sslCert
 	log.Infof("gateway %v (%v) starting, connecting to relay %v:%v", "", g.TbConfig.Environment, instruction.IP, instruction.Port)
 }
 
+func (g *gateway) broadcast(msg tbmessage.Message, source connections.Conn, to utils.NodeType) types.BroadcastResults {
+	g.ConnectionsLock.RLock()
+	defer g.ConnectionsLock.RUnlock()
+	results := types.BroadcastResults{}
+
+	for _, conn := range g.Connections {
+		// if connection type is not in target - skip
+		if conn.Info().ConnectionType&to == 0 {
+			continue
+		}
+
+		results.RelevantPeers++
+		if !conn.IsOpen() || source != nil && conn.ID() == source.ID() {
+			results.NotOpenPeers++
+			continue
+		}
+
+		err := conn.Send(msg)
+		if err != nil {
+			conn.Log().Errorf("error writing to connection, closing")
+			results.ErrorPeers++
+			continue
+		}
+
+		if conn.Info().IsGateway() {
+			results.SentGatewayPeers++
+		}
+
+		results.SentPeers++
+	}
+	return results
+}
+
 func (g *gateway) handleBridgeMessages() error {
 	for {
 		select {
 		case txsFromNode := <-g.bridge.ReceiveNodeTransactions():
-			log.Infof("%v", txsFromNode)
+			blockchainConnection := connections.NewBlockchainConn(txsFromNode.PeerEndpoint)
+			for _, blockchainTx := range txsFromNode.Transactions {
+				tx := tbmessage.NewTx(blockchainTx.Hash(), blockchainTx.Content(), 1)
+				g.processTransaction(tx, blockchainConnection)
+			}
 		}
 	}
+}
+
+func (g *gateway) processTransaction(tx *tbmessage.Tx, source connections.Conn) {
+	_ = g.broadcast(tx, source, utils.RelayTransaction)
 }

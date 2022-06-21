@@ -34,6 +34,8 @@ func NewTbConn(node connections.TbListener, connect func() (connections.Socket, 
 		Node:    node,
 		Handler: handler,
 	}
+	// TODO: remove this
+	tc.setConnectionEstablished()
 	return tc
 }
 
@@ -47,6 +49,11 @@ func (b *TbConn) Start() error {
 // This method only handles messages that do not require querying the BxListener interface
 func (b *TbConn) ProcessMessage(msg tbmessage.MessageBytes) {
 
+}
+
+func (b *TbConn) setConnectionEstablished() {
+	b.connectionEstablished = true
+	_ = b.Node.OnConnEstablished(b)
 }
 
 // readLoop connects and reads messages from the socket.

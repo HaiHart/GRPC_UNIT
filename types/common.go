@@ -84,3 +84,6 @@ type NetworkNum uint32
 
 // NetworkNumLen is the byte length of packed network numbers
 const NetworkNumLen = UInt32Len
+
+// AllNetworkNum is the network number for relays that facilitate transactions from all networks
+const AllNetworkNum NetworkNum = 0

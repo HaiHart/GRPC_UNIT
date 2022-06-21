@@ -78,11 +78,11 @@ func runGateway(c *cli.Context) error {
 	var blockchainPeers []types.NodeEndpoint
 	for _, peer := range ethConfig.StaticPeers {
 		blockchainPeer := peer.Enode
-		enodePublicKey := fmt.Sprintf("%x", crypto.FromECDSAPub(blockchainPeer.Pubkey())[1:])
+		publicKey := fmt.Sprintf("%x", crypto.FromECDSAPub(blockchainPeer.Pubkey())[1:])
 		blockchainPeers = append(blockchainPeers, types.NodeEndpoint{
 			IP:        blockchainPeer.IP().String(),
 			Port:      blockchainPeer.TCP(),
-			PublicKey: enodePublicKey,
+			PublicKey: publicKey,
 		})
 	}
 

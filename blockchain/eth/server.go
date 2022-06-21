@@ -40,7 +40,7 @@ func NewServer(parent context.Context, config *network.EthConfig, bridge blockch
 	}
 
 	ctx, cancel := context.WithCancel(parent)
-	backend := NewHandler(ctx, bridge, config)
+	handler := NewHandler(ctx, bridge, config)
 
 	server := p2p.Server{
 		Config: p2p.Config{
@@ -57,7 +57,7 @@ func NewServer(parent context.Context, config *network.EthConfig, bridge blockch
 			TrustedNodes:     nil,
 			NetRestrict:      nil,
 			NodeDatabase:     "",
-			Protocols:        MakeProtocols(ctx, backend),
+			Protocols:        MakeProtocols(ctx, handler),
 			ListenAddr:       "",
 			NAT:              nil,
 			Dialer:           nil,

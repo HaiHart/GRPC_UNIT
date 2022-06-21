@@ -302,12 +302,10 @@ func (ep *Peer) Handshake(version uint32, network uint64, td *big.Int, head comm
 
 func (ep *Peer) readStatus() (*eth.StatusPacket, error) {
 	var status eth.StatusPacket
-
 	msg, err := ep.rw.ReadMsg()
 	if err != nil {
 		return nil, err
 	}
-
 	defer func() {
 		_ = msg.Discard()
 	}()
@@ -531,7 +529,7 @@ func (ep *Peer) sendNewBlock(packet *eth.NewBlockPacket) error {
 				if ep.confirmedHead.height >= blockNumber {
 					return
 				}
-				err := ep.RequestBlockHeader(blockHash)
+				err = ep.RequestBlockHeader(blockHash)
 				if err != nil {
 					return
 				}
