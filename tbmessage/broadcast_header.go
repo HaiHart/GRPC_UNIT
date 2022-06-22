@@ -71,8 +71,8 @@ func (b *BroadcastHeader) Pack(buf *[]byte, msgType string) {
 }
 
 // Unpack deserializes a BroadcastHeader from a buffer
-func (b *BroadcastHeader) Unpack(buf []byte, protocol Protocol) error {
-	if err := b.Header.Unpack(buf, protocol); err != nil {
+func (b *BroadcastHeader) Unpack(buf []byte) error {
+	if err := b.Header.Unpack(buf); err != nil {
 		return err
 	}
 	if err := checkBufSize(&buf, 0, int(b.Size())); err != nil {

@@ -7,9 +7,6 @@ import (
 	"fmt"
 )
 
-// Protocol represents the protocol version number
-type Protocol uint32
-
 // SendPriority controls the priority send queue
 type SendPriority int
 
@@ -45,7 +42,7 @@ func (h *Header) Pack(buf *[]byte, msgType string) {
 }
 
 // Unpack deserializes a Header from a buffer
-func (h *Header) Unpack(buf []byte, _ Protocol) error {
+func (h *Header) Unpack(buf []byte) error {
 	h.msgType = string(bytes.Trim(buf[TypeOffset:TypeOffset+TypeLength], NullByte))
 	return nil
 }

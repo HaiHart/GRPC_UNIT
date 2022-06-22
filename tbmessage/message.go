@@ -9,8 +9,8 @@ import (
 
 // Message is the base interface of all connection message sent on the wire
 type Message interface {
-	Pack(protocol Protocol) ([]byte, error)
-	Unpack(buf []byte, protocol Protocol) error
+	Pack() ([]byte, error)
+	Unpack(buf []byte) error
 	GetPriority() SendPriority
 	SetPriority(priority SendPriority)
 	String() string

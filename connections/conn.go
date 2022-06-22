@@ -18,9 +18,6 @@ type Conn interface {
 	IsOpen() bool
 	IsDisabled() bool
 
-	Protocol() tbmessage.Protocol
-	SetProtocol(tbmessage.Protocol)
-
 	Log() *log.Entry
 
 	Connect() error

@@ -32,7 +32,6 @@ type SSLConn struct {
 	connect         func() (Socket, error)
 	ip              string
 	port            int64
-	protocol        tbmessage.Protocol
 	sslCerts        *utils.SSLCerts
 	connectionOpen  bool
 	disabled        bool
@@ -51,13 +50,12 @@ type SSLConn struct {
 var _ Conn = (*SSLConn)(nil)
 
 // NewSSLConnection constructs a new SSL connection. If socket is not nil, then the connection was initiated by the remote.
-func NewSSLConnection(connect func() (Socket, error), sslCerts *utils.SSLCerts, ip string, port int64, protocol tbmessage.Protocol, logMessages bool, sendChannelSize int, clock utils.Clock) *SSLConn {
+func NewSSLConnection(connect func() (Socket, error), sslCerts *utils.SSLCerts, ip string, port int64, logMessages bool, sendChannelSize int, clock utils.Clock) *SSLConn {
 	conn := &SSLConn{
 		connect:         connect,
 		sslCerts:        sslCerts,
 		ip:              ip,
 		port:            port,
-		protocol:        protocol,
 		buf:             bytes.Buffer{},
 		logMessages:     logMessages,
 		sendChannelSize: sendChannelSize,
@@ -102,7 +100,7 @@ func (s *SSLConn) packAndWrite(msg tbmessage.Message) {
 		return
 	}
 
-	buf, err := msg.Pack(s.protocol)
+	buf, err := msg.Pack()
 	if err != nil {
 		s.Log().Warnf("can't pack message %v: %v. skipping", msg, err)
 		return
@@ -140,16 +138,6 @@ func (s *SSLConn) IsOpen() bool {
 // IsDisabled indicates whether the socket connection is disabled (ping and pong only)
 func (s SSLConn) IsDisabled() bool {
 	return s.disabled
-}
-
-// Protocol provides the protocol version of the connection
-func (s *SSLConn) Protocol() tbmessage.Protocol {
-	return s.protocol
-}
-
-// SetProtocol sets the protocol version the connection is using
-func (s *SSLConn) SetProtocol(p tbmessage.Protocol) {
-	s.protocol = p
 }
 
 // Log returns the context logger for the SSL connection

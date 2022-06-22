@@ -61,15 +61,6 @@ func (b Blockchain) IsDisabled() bool {
 	return false
 }
 
-// Protocol indicates that the Blockchain does not have a protocol
-func (b Blockchain) Protocol() tbmessage.Protocol {
-	return tbmessage.EmptyProtocol
-}
-
-// SetProtocol is a no-op
-func (b Blockchain) SetProtocol(protocol tbmessage.Protocol) {
-}
-
 // Log returns the blockchain connection logger
 func (b Blockchain) Log() *log.Entry {
 	return b.log

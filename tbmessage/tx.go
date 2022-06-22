@@ -27,8 +27,8 @@ func (m *Tx) SetContent(content []byte) {
 }
 
 // Pack serializes a Tx into a buffer for sending
-func (m Tx) Pack(protocol Protocol) ([]byte, error) {
-	bufLen := m.size(protocol)
+func (m Tx) Pack() ([]byte, error) {
+	bufLen := m.size()
 	buf := make([]byte, bufLen)
 	m.BroadcastHeader.Pack(&buf, TxType)
 	offset := BroadcastHeaderLen
@@ -43,7 +43,7 @@ func (m Tx) Pack(protocol Protocol) ([]byte, error) {
 	return buf, nil
 }
 
-func (m *Tx) size(protocol Protocol) uint32 {
+func (m *Tx) size() uint32 {
 	contentSize := uint32(len(m.content))
 	if contentSize > 0 {
 		contentSize += SenderLen

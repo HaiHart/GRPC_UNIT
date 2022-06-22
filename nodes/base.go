@@ -35,7 +35,7 @@ func NewBase(tbConfig *config.TurboConfig, dataDir string) Base {
 func (b *Base) OnConnEstablished(conn connections.Conn) error {
 	connInfo := conn.Info()
 	conn.Log().Infof("connection established, gateway: %v, bdn: %v protocol version %v, network %v, on local port %v",
-		connInfo.IsGateway(), connInfo.IsBDN(), conn.Protocol(), connInfo.NetworkNum, conn.Info().LocalPort)
+		connInfo.IsGateway(), connInfo.IsBDN(), connInfo.NetworkNum, conn.Info().LocalPort)
 	b.ConnectionsLock.Lock()
 	defer b.ConnectionsLock.Unlock()
 	b.Connections = append(b.Connections, conn)

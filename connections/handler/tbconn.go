@@ -30,7 +30,7 @@ type TbConn struct {
 // NewTbConn constructs a connection to a turbo node
 func NewTbConn(node connections.TbListener, connect func() (connections.Socket, error), handler connections.ConnHandler, sslCerts *utils.SSLCerts, ip string, port int64, nodeID types.NodeID, logMessages bool, clock utils.Clock) *TbConn {
 	tc := &TbConn{
-		Conn:    connections.NewSSLConnection(connect, sslCerts, ip, port, 1, logMessages, 100000, clock),
+		Conn:    connections.NewSSLConnection(connect, sslCerts, ip, port, logMessages, 100000, clock),
 		Node:    node,
 		Handler: handler,
 	}
