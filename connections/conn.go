@@ -42,7 +42,7 @@ const (
 
 // TbListener defines a struct that is capable of processing messages
 type TbListener interface {
-	HandleMsg(msg tbmessage.Message, conn Conn) error
+	HandleMsg(msg tbmessage.Message, conn Conn, background MsgHandlingOptions) error
 	ValidateConnection(conn Conn) error
 
 	// OnConnEstablished is a callback for when a connection has been connected and finished its handshake

@@ -9,6 +9,7 @@ import (
 	"github.com/massbitprotocol/turbo/connections"
 	"github.com/massbitprotocol/turbo/connections/handler"
 	log "github.com/massbitprotocol/turbo/logger"
+	"github.com/massbitprotocol/turbo/services"
 	"github.com/massbitprotocol/turbo/tbmessage"
 	"github.com/massbitprotocol/turbo/types"
 	"github.com/massbitprotocol/turbo/utils"
@@ -24,6 +25,7 @@ type gateway struct {
 	cancel  context.CancelFunc
 
 	bridge          blockchain.Bridge
+	asyncMsgChannel chan services.MsgInfo
 	blockchainPeers []types.NodeEndpoint
 	clock           utils.Clock
 	timeStarted     time.Time
@@ -48,6 +50,7 @@ func NewGateway(parent context.Context, tbConfig *config.TurboConfig, bridge blo
 		timeStarted:     clock.Now(),
 		gatewayPeers:    generatePeers(peersInfo),
 	}
+	g.asyncMsgChannel = services.NewAsyncMsgChannel(g)
 
 	return g, nil
 }
@@ -154,6 +157,23 @@ func (g *gateway) handleBridgeMessages() error {
 			}
 		}
 	}
+}
+
+func (g *gateway) HandleMsg(msg tbmessage.Message, source connections.Conn, background connections.MsgHandlingOptions) error {
+	var err error
+	if background {
+		g.asyncMsgChannel <- services.MsgInfo{Msg: msg, Source: source}
+		return nil
+	}
+
+	switch msg.(type) {
+	case *tbmessage.Tx:
+		tx := msg.(*tbmessage.Tx)
+		g.processTransaction(tx, source)
+	default:
+		err = g.Base.HandleMsg(msg, source)
+	}
+	return err
 }
 
 func (g *gateway) processTransaction(tx *tbmessage.Tx, source connections.Conn) {

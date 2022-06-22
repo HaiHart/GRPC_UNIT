@@ -10,7 +10,7 @@ import (
 	"sync"
 )
 
-// Base is a base struct for nodes
+// Base is a base handler for nodes
 type Base struct {
 	Abstract
 	TbConfig        *config.TurboConfig
@@ -20,7 +20,7 @@ type Base struct {
 	clock           utils.RealClock
 }
 
-// NewBase initializes a generic Base node struct
+// NewBase initializes a generic Base
 func NewBase(tbConfig *config.TurboConfig, dataDir string) Base {
 	return Base{
 		TbConfig:        tbConfig,
@@ -31,7 +31,7 @@ func NewBase(tbConfig *config.TurboConfig, dataDir string) Base {
 	}
 }
 
-// OnConnEstablished - a callback function. Called when new connection is established
+// OnConnEstablished - a callback function called when new connection is established
 func (b *Base) OnConnEstablished(conn connections.Conn) error {
 	connInfo := conn.Info()
 	conn.Log().Infof("connection established, gateway: %v, bdn: %v protocol version %v, network %v, on local port %v",

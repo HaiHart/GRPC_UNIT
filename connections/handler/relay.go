@@ -33,6 +33,9 @@ func (r *Relay) ProcessMessage(msg tbmessage.MessageBytes) {
 	}
 
 	switch msgType {
-
+	case tbmessage.TxType:
+		tx := &tbmessage.Tx{}
+		_ = tx.Unpack(msg)
+		_ = r.Node.HandleMsg(tx, r, connections.RunForeground)
 	}
 }
