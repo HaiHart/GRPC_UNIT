@@ -12,14 +12,11 @@ import (
 )
 
 const (
-	// RemoteInitiatedPort is a special constant used to indicate connections initiated from the remote
+	// RemoteInitiatedPort indicates connections initiated from the remote
 	RemoteInitiatedPort = 0
 
-	// LocalInitiatedPort is a special constant used to indicate connections initiated locally
+	// LocalInitiatedPort indicates connections initiated locally
 	LocalInitiatedPort = 0
-
-	// PriorityQueueInterval represents the minimum amount of time that must be elapsed between non highest priority messages intended to send along the connection
-	PriorityQueueInterval = 500 * time.Microsecond
 
 	readPacketSize = 4096
 )
@@ -27,8 +24,8 @@ const (
 // SSLConn represents the basic connection properties for connections opened between nodes. SSLConn does not define any message handlers, and only implements the Conn interface.
 type SSLConn struct {
 	Socket
-	writer *bufio.Writer
-
+	writer          *bufio.Writer
+	buf             bytes.Buffer
 	connect         func() (Socket, error)
 	ip              string
 	port            int64
@@ -38,7 +35,6 @@ type SSLConn struct {
 	done            context.CancelFunc
 	sendMessages    chan tbmessage.Message
 	sendChannelSize int
-	buf             bytes.Buffer
 	logMessages     bool
 	extensions      utils.TbSSLProperties
 	packet          []byte
@@ -52,11 +48,11 @@ var _ Conn = (*SSLConn)(nil)
 // NewSSLConnection constructs a new SSL connection. If socket is not nil, then the connection was initiated by the remote.
 func NewSSLConnection(connect func() (Socket, error), sslCerts *utils.SSLCerts, ip string, port int64, logMessages bool, sendChannelSize int, clock utils.Clock) *SSLConn {
 	conn := &SSLConn{
+		buf:             bytes.Buffer{},
 		connect:         connect,
-		sslCerts:        sslCerts,
 		ip:              ip,
 		port:            port,
-		buf:             bytes.Buffer{},
+		sslCerts:        sslCerts,
 		logMessages:     logMessages,
 		sendChannelSize: sendChannelSize,
 		packet:          make([]byte, readPacketSize),
@@ -66,8 +62,7 @@ func NewSSLConnection(connect func() (Socket, error), sslCerts *utils.SSLCerts, 
 	return conn
 }
 
-// sendLoop waits for messages on channel and send them to the socket
-// terminates when the channel is closed
+// sendLoop waits for messages on channel and send them to the socket, terminates when the channel is closed
 func (s *SSLConn) sendLoop(ctx context.Context) {
 	s.Log().Trace("starting send loop")
 	for {
@@ -121,12 +116,16 @@ func (s *SSLConn) ID() Socket {
 // Info returns connection details, include details parsed from certificates
 func (s *SSLConn) Info() Info {
 	return Info{
-		PeerIP:          s.ip,
-		PeerPort:        s.port,
-		LocalPort:       LocalInitiatedPort,
+		NodeID:    s.extensions.NodeID,
+		PeerIP:    s.ip,
+		PeerPort:  s.port,
+		LocalPort: LocalInitiatedPort,
+		// TODO: ConnectionType = s.extensions.NodeType
 		ConnectionType:  utils.RelayTransaction,
 		ConnectionState: "",
-		NetworkNum:      1,
+		NetworkNum:      0,
+		FromMe:          s.isInitiator(),
+		ConnectedAt:     s.connectedAt,
 	}
 }
 
@@ -145,9 +144,7 @@ func (s *SSLConn) Log() *log.Entry {
 	return s.log
 }
 
-// Connect initializes a connection to a node.
-// If this is called when the remote addr is the one initiating the connection, then this function is does little besides mark some connection states as ready.
-// Connect is also responsible for starting any goroutines relevant to the connection.
+// Connect initializes a connection to a node. If this is called when the remote addr is the one initiating the connection, then this function is does little besides mark some connection states as ready.
 func (s *SSLConn) Connect() error {
 	var err error
 	s.Socket, err = s.connect()
@@ -156,14 +153,13 @@ func (s *SSLConn) Connect() error {
 		return err
 	}
 
-	// allocate a buffered writer to combine outgoing messages
 	s.writer = bufio.NewWriter(s.Socket)
 	s.connectedAt = s.clock.Now()
 
-	//s.extensions, err = s.Properties()
-	//if err != nil {
-	//	return err
-	//}
+	s.extensions, err = s.Properties()
+	if err != nil {
+		return err
+	}
 	s.connectionOpen = true
 
 	s.sendMessages = make(chan tbmessage.Message, s.sendChannelSize)
@@ -235,6 +231,16 @@ func (s *SSLConn) Send(msg tbmessage.Message) error {
 
 // SendWithDelay sends messages over the wire to the peer node after waiting the requests delay
 func (s *SSLConn) SendWithDelay(msg tbmessage.Message, delay time.Duration) error {
+	if delay == 0 {
+		return s.Send(msg)
+	}
+	go func() {
+		s.clock.Sleep(delay)
+		err := s.Send(msg)
+		if err != nil {
+			s.Log().Errorf("could not send on conn %v", err)
+		}
+	}()
 	return nil
 }
 
@@ -290,7 +296,7 @@ func (s *SSLConn) close(reason string) error {
 			s.Log().Debugf("unable to close connection: %v", err)
 			return err
 		}
-		s.Log().Infof("TLS is now closed: %v", reason)
+		s.Log().Infof("TLS connection is closed: %v", reason)
 	}
 	return nil
 }

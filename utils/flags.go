@@ -18,7 +18,7 @@ var (
 	BlockchainNetworkFlag = &cli.StringFlag{
 		Name:  "blockchain-network",
 		Usage: "determine the blockchain network",
-		Value: "Ethereum-Mainnet",
+		Value: "ethereum-mainnet",
 	}
 	DisableProfilingFlag = &cli.BoolFlag{
 		Name:  "disable-profiling",

@@ -108,12 +108,10 @@ func runGateway(c *cli.Context) error {
 	var blockchainServer *eth.Server
 	if len(blockchainPeers) > 0 {
 		log.Infof("starting blockchain client with config for network ID: %v", ethConfig.Network)
-
 		blockchainServer, err = eth.NewServerWithEthLogger(ctx, ethConfig, bridge, c.String(utils.DataDirFlag.Name))
 		if err != nil {
 			return err
 		}
-
 		if err = blockchainServer.Start(); err != nil {
 			return nil
 		}

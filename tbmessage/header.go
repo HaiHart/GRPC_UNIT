@@ -7,33 +7,16 @@ import (
 	"fmt"
 )
 
-// SendPriority controls the priority send queue
-type SendPriority int
-
-// message sending priorities
-const (
-	HighestPriority SendPriority = iota
-	HighPriority
-	NormalPriority
-	LowPriority
-	LowestPriority
-	OnPongPriority
-)
-
-func (p SendPriority) String() string {
-	return [...]string{"HighestPriority", "HighPriority", "NormalPriority", "LowPriority", "LowestPriority"}[p]
-}
-
 // Header represents the shared header of a message
 type Header struct {
-	priority *SendPriority
-	msgType  string
+	msgType string
 }
 
 // Pack serializes a Header into a buffer for sending on the wire
 func (h *Header) Pack(buf *[]byte, msgType string) {
 	h.msgType = msgType
 
+	// TODO What does this "0xfffefdfc" value mean?
 	binary.BigEndian.PutUint32(*buf, 0xfffefdfc)
 	copy((*buf)[TypeOffset:], msgType)
 	binary.LittleEndian.PutUint32((*buf)[PayloadSizeOffset:], uint32(len(*buf))-HeaderLen)
@@ -50,19 +33,6 @@ func (h *Header) Unpack(buf []byte) error {
 // Size returns the byte length of header plus ControlByteLen
 func (h *Header) Size() uint32 {
 	return HeaderLen + ControlByteLen
-}
-
-// GetPriority extracts the message send priority
-func (h *Header) GetPriority() SendPriority {
-	if h.priority == nil {
-		return NormalPriority
-	}
-	return *h.priority
-}
-
-// SetPriority sets the message send priority
-func (h *Header) SetPriority(priority SendPriority) {
-	h.priority = &priority
 }
 
 func (h *Header) String() string {

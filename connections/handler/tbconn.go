@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/binary"
 	"github.com/massbitprotocol/turbo/connections"
+	log "github.com/massbitprotocol/turbo/logger"
 	"github.com/massbitprotocol/turbo/tbmessage"
 	"github.com/massbitprotocol/turbo/types"
 	"github.com/massbitprotocol/turbo/utils"
@@ -24,15 +25,27 @@ type TbConn struct {
 	lock                  *sync.Mutex
 	connectionEstablished bool
 	closed                bool
+	nodeID                types.NodeID
+	peerID                types.NodeID
+	accountID             types.AccountID
+	connectionType        utils.NodeType
+	log                   *log.Entry
 	clock                 utils.Clock
+	connectedAt           time.Time
 }
 
 // NewTbConn constructs a connection to a turbo node
-func NewTbConn(node connections.TbListener, connect func() (connections.Socket, error), handler connections.ConnHandler, sslCerts *utils.SSLCerts, ip string, port int64, nodeID types.NodeID, logMessages bool, clock utils.Clock) *TbConn {
+func NewTbConn(node connections.TbListener, connect func() (connections.Socket, error), handler connections.ConnHandler, sslCerts *utils.SSLCerts, ip string, port int64, nodeID types.NodeID, connectionType utils.NodeType, logMessages bool, clock utils.Clock) *TbConn {
 	tc := &TbConn{
 		Conn:    connections.NewSSLConnection(connect, sslCerts, ip, port, logMessages, 100000, clock),
 		Node:    node,
 		Handler: handler,
+		nodeID:  nodeID,
+		log: log.WithFields(log.Fields{
+			"connType":   connectionType.String(),
+			"remoteAddr": "<connecting>",
+		}),
+		clock: clock,
 	}
 	// TODO: remove this
 	tc.setConnectionEstablished()
@@ -48,7 +61,11 @@ func (b *TbConn) Start() error {
 // ProcessMessage constructs a message from the buffer and handles it
 // This method only handles messages that do not require querying the BxListener interface
 func (b *TbConn) ProcessMessage(msg tbmessage.MessageBytes) {
-
+	msgType := msg.TbType()
+	switch msgType {
+	default:
+		b.Log().Debugf("read %v (%d bytes)", msgType, len(msg))
+	}
 }
 
 func (b *TbConn) setConnectionEstablished() {
@@ -100,6 +117,7 @@ func (b *TbConn) readLoop() {
 		if b.closed {
 			break
 		}
+
 		// sleep before next connection attempt
 		// note - in docker environment the docker-proxy may keep the port open after the docker was stopped. we
 		// need this sleep to avoid fast connect/disconnect loop

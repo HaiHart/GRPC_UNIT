@@ -13,15 +13,15 @@ type Relay struct {
 }
 
 // NewOutboundRelay builds a new connection to a relay
-func NewOutboundRelay(node connections.TbListener, sslCerts *utils.SSLCerts, relayIP string, relayPort int64, nodeId types.NodeID, clock utils.Clock) *Relay {
+func NewOutboundRelay(node connections.TbListener, sslCerts *utils.SSLCerts, relayIP string, relayPort int64, nodeId types.NodeID, connectionType utils.NodeType, clock utils.Clock) *Relay {
 	return newRelay(node, func() (connections.Socket, error) {
 		return connections.NewTLS(relayIP, int(relayPort), sslCerts)
-	}, sslCerts, relayIP, relayPort, nodeId, clock)
+	}, sslCerts, relayIP, relayPort, nodeId, connectionType, clock)
 }
 
-func newRelay(node connections.TbListener, connect func() (connections.Socket, error), sslCerts *utils.SSLCerts, relayIP string, relayPort int64, nodeId types.NodeID, clock utils.Clock) *Relay {
+func newRelay(node connections.TbListener, connect func() (connections.Socket, error), sslCerts *utils.SSLCerts, relayIP string, relayPort int64, nodeId types.NodeID, connectionType utils.NodeType, clock utils.Clock) *Relay {
 	r := &Relay{}
-	r.TbConn = NewTbConn(node, connect, r, sslCerts, relayIP, relayPort, nodeId, true, clock)
+	r.TbConn = NewTbConn(node, connect, r, sslCerts, relayIP, relayPort, nodeId, connectionType, true, clock)
 	return r
 }
 

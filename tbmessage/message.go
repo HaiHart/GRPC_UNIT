@@ -11,8 +11,6 @@ import (
 type Message interface {
 	Pack() ([]byte, error)
 	Unpack(buf []byte) error
-	GetPriority() SendPriority
-	SetPriority(priority SendPriority)
 	String() string
 }
 

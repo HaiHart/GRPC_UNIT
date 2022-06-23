@@ -8,7 +8,7 @@ import (
 )
 
 var networkMapping = map[string]EthConfig{
-	"Ethereum-Mainnet": newEthereumMainnetConfig(),
+	"ethereum-mainnet": newEthereumMainnetConfig(),
 }
 
 // NewEthereumPreset returns an Ethereum configuration for the given network name. For most of these presets, the client will present itself as only having the genesis block, but that shouldn't matter too much.

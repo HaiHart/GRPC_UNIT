@@ -1,25 +1,12 @@
 package types
 
 import (
-	"bytes"
 	"encoding/hex"
 	"fmt"
 )
 
 // UInt32Len is the byte length of unsigned 32bit integers
 const UInt32Len = 4
-
-// UInt64Len is the byte length of unsigned 64bit integers
-const UInt64Len = 8
-
-// UInt16Len is the byte length of unsigned 16bit integers
-const UInt16Len = 2
-
-// UInt8Len is the byte length of unsigned 8bit integers
-const UInt8Len = 1
-
-// TxFlagsLen represents the byte length of transaction flag
-const TxFlagsLen = 2
 
 // NodeEndpoint - represent the node endpoint struct sent in BdnPerformanceStats
 type NodeEndpoint struct {
@@ -38,14 +25,14 @@ func (e NodeEndpoint) IPPort() string {
 	return fmt.Sprintf("%v %v", e.IP, e.Port)
 }
 
-// ShortID represents the compressed transaction ID
-type ShortID uint32
+// TxID represents the transaction ID
+type TxID uint32
 
-// ShortIDList represents short id list
-type ShortIDList []ShortID
+// TxIDList represents transaction ID list
+type TxIDList []TxID
 
-// ShortIDsByNetwork represents map of shortIDs by network
-type ShortIDsByNetwork map[NetworkNum]ShortIDList
+// TxIDsByNetwork represents map of txIDs by network
+type TxIDsByNetwork map[NetworkNum]TxIDList
 
 // NodeID represents a node's assigned ID. This field is a UUID.
 type NodeID string
@@ -61,23 +48,11 @@ func (s Sender) String() string {
 	return hex.EncodeToString(s[:])
 }
 
-// EmptyAccountID represent no Account ID set
-const EmptyAccountID AccountID = ""
+// TxIDEmpty is the default value indicating no assigned short ID
+const TxIDEmpty = 0
 
-// NewAccountID constructs an accountID from bytes, stripping off null bytes.
-func NewAccountID(b []byte) AccountID {
-	trimmed := bytes.Trim(b, "\x00")
-	return AccountID(trimmed)
-}
-
-// NodeIDLen is the number of characters in a NodeID
-const NodeIDLen = 36
-
-// ShortIDEmpty is the default value indicating no assigned short ID
-const ShortIDEmpty = 0
-
-// ShortIDLen is the byte length of packed short IDs
-const ShortIDLen = UInt32Len
+// TxIDLen is the byte length of packed short IDs
+const TxIDLen = UInt32Len
 
 // NetworkNum represents the network that a message is being routed in (Ethereum Mainnet, Ethereum Ropsten, etc.)
 type NetworkNum uint32

@@ -20,6 +20,9 @@ const (
 
 	// Blockchain represents a blockchain connection type
 	Blockchain
+
+	// Relay collects all the relay types
+	Relay = RelayTransaction | RelayBlock
 )
 
 var nodeTypeNames = map[NodeType]string{
@@ -27,6 +30,7 @@ var nodeTypeNames = map[NodeType]string{
 	RelayTransaction: "RELAY_TRANSACTION",
 	RelayBlock:       "RELAY_BLOCK",
 	Blockchain:       "BLOCKCHAIN",
+	Relay:            "RELAY",
 }
 
 var nodeNameTypes = map[string]NodeType{
@@ -34,6 +38,7 @@ var nodeNameTypes = map[string]NodeType{
 	"RELAY_TRANSACTION": RelayTransaction,
 	"RELAY_BLOCK":       RelayBlock,
 	"BLOCKCHAIN":        Blockchain,
+	"RELAY":             Relay,
 }
 
 // String returns the string representation of a node type for use (e.g. in JSON dumps)

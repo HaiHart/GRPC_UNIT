@@ -19,6 +19,10 @@ import (
 	"time"
 )
 
+const (
+	timeToAvoidReEntry = 6 * time.Hour
+)
+
 type gateway struct {
 	Base
 	context context.Context
@@ -51,7 +55,9 @@ func NewGateway(parent context.Context, tbConfig *config.TurboConfig, bridge blo
 		gatewayPeers:    generatePeers(peersInfo),
 	}
 	g.asyncMsgChannel = services.NewAsyncMsgChannel(g)
-
+	assigner := services.NewEmptyTxIDAssigner()
+	txStore := services.NewTbTxStore(3*24*time.Hour, assigner, services.NewHashHistory("seenTxs", 30*time.Minute), timeToAvoidReEntry)
+	g.TxStore = &txStore
 	return g, nil
 }
 
@@ -108,7 +114,7 @@ func (g *gateway) handleRelayConnections(instructions chan connections.RelayInst
 }
 
 func (g *gateway) connectRelay(instruction connections.RelayInstruction, sslCerts utils.SSLCerts) {
-	relay := handler.NewOutboundRelay(g, &sslCerts, instruction.IP, instruction.Port, "", utils.RealClock{})
+	relay := handler.NewOutboundRelay(g, &sslCerts, instruction.IP, instruction.Port, "", utils.Relay, utils.RealClock{})
 	var _ = relay.Start()
 	log.Infof("gateway %v (%v) starting, connecting to relay %v:%v", "", g.TbConfig.Environment, instruction.IP, instruction.Port)
 }
@@ -177,5 +183,33 @@ func (g *gateway) HandleMsg(msg tbmessage.Message, source connections.Conn, back
 }
 
 func (g *gateway) processTransaction(tx *tbmessage.Tx, source connections.Conn) {
-	_ = g.broadcast(tx, source, utils.RelayTransaction)
+	startTime := time.Now()
+	networkDuration := startTime.Sub(tx.Timestamp()).Microseconds()
+	sentToBlockchainNode := false
+	sentToBDN := false
+	// we add the transaction to TxStore with current time, so we can measure time difference to node announcement/confirmation
+	txResult := g.TxStore.Add(tx.Hash(), tx.Content(), tx.TxID(), tx.NetworkNum(), g.clock.Now())
+	if txResult.NewContent || txResult.Reprocess {
+		if txResult.NewContent {
+
+		}
+
+		if !source.Info().IsRelay() {
+			if !txResult.Reprocess {
+
+			}
+
+			tx.SetSender(txResult.Sender)
+			tx.SetTimestamp(g.clock.Now())
+			_ = g.broadcast(tx, source, utils.RelayTransaction)
+			sentToBDN = true
+		}
+
+		if source.Info().ConnectionType != utils.Blockchain {
+			_ = g.bridge.SendTransactionsFromBDN([]*types.TbTransaction{txResult.Transaction})
+			sentToBlockchainNode = true
+		}
+	}
+
+	log.Tracef("msgTx: from %v, hash %v, new Tx %v, new content %v, new TxID %v, sentToBDN: %v, sentToBlockchainNode: %v, handling duration %v, sender %v, networkDuration %v", source, tx.Hash(), txResult.NewTx, txResult.NewContent, txResult.NewTxID, sentToBDN, sentToBlockchainNode, time.Since(startTime), tx.Sender(), networkDuration)
 }

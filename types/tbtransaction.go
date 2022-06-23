@@ -13,19 +13,17 @@ type TbTransaction struct {
 	m          sync.Mutex
 	hash       SHA256Hash
 	content    TxContent
-	shortIDs   ShortIDList
+	txIDs      TxIDList
 	addTime    time.Time
-	flags      TxFlags
 	networkNum NetworkNum
 }
 
-// NewTbTransaction creates a new transaction to be stored. Transactions are not expected to be initialized with content or shortIDs; they should be added via AddShortID and SetContent.
-func NewTbTransaction(hash SHA256Hash, networkNum NetworkNum, flags TxFlags, timestamp time.Time) *TbTransaction {
+// NewTbTransaction creates a new transaction to be stored. Transactions are not expected to be initialized with content or txIDs; they should be added via AddTxID and SetContent.
+func NewTbTransaction(hash SHA256Hash, networkNum NetworkNum, timestamp time.Time) *TbTransaction {
 	return &TbTransaction{
 		hash:       hash,
 		addTime:    timestamp,
 		networkNum: networkNum,
-		flags:      flags,
 	}
 }
 
@@ -42,26 +40,6 @@ func (bt *TbTransaction) Hash() SHA256Hash {
 	return bt.hash
 }
 
-// Flags returns the transaction flags for routing
-func (bt *TbTransaction) Flags() TxFlags {
-	return bt.flags
-}
-
-// AddFlags adds the provided flag to the transaction flag set
-func (bt *TbTransaction) AddFlags(flags TxFlags) {
-	bt.flags |= flags
-}
-
-// SetFlags sets the message flags
-func (bt *TbTransaction) SetFlags(flags TxFlags) {
-	bt.flags = flags
-}
-
-// RemoveFlags sets off txFlag
-func (bt *TbTransaction) RemoveFlags(flags TxFlags) {
-	bt.SetFlags(bt.Flags() &^ flags)
-}
-
 // Content returns the transaction contents (usually the blockchain transaction bytes)
 func (bt *TbTransaction) Content() TxContent {
 	return bt.content
@@ -73,8 +51,8 @@ func (bt *TbTransaction) HasContent() bool {
 }
 
 // ShortIDs returns the (possibly multiple) short IDs assigned to a transaction
-func (bt *TbTransaction) ShortIDs() ShortIDList {
-	return bt.shortIDs
+func (bt *TbTransaction) ShortIDs() TxIDList {
+	return bt.txIDs
 }
 
 // NetworkNum provides the network number of the transaction
@@ -102,18 +80,18 @@ func (bt *TbTransaction) Unlock() {
 	bt.m.Unlock()
 }
 
-// AddShortID adds an assigned shortID, indicating whether it was actually new. Should be called with Lock()
-func (bt *TbTransaction) AddShortID(shortID ShortID) bool {
-	if shortID == ShortIDEmpty {
+// AddTxID adds an assigned shortID, indicating whether it was actually new. Should be called with Lock()
+func (bt *TbTransaction) AddTxID(txID TxID) bool {
+	if txID == TxIDEmpty {
 		return false
 	}
 
-	for _, existingShortID := range bt.shortIDs {
-		if shortID == existingShortID {
+	for _, existingShortID := range bt.txIDs {
+		if txID == existingShortID {
 			return false
 		}
 	}
-	bt.shortIDs = append(bt.shortIDs, shortID)
+	bt.txIDs = append(bt.txIDs, txID)
 	return true
 }
 
@@ -133,17 +111,5 @@ func (bt *TbTransaction) BlockchainTransaction(extractSender bool) (BlockchainTr
 }
 
 func (bt *TbTransaction) parseTransaction(extractSender bool) (BlockchainTransaction, error) {
-	// TODO - add support for additional networks
-
-	// for now, since we only support Ethereum based transaction
-	// we are not checking but parsing as if the transaction is Ethereum based.
 	return EthTransactionFromBytes(bt.hash, bt.content, extractSender)
-	/*
-		switch bt.networkNum {
-		case EthereumNetworkNum:
-			return NewEthTransaction(bt.hash, bt.content)
-		default:
-			return nil, fmt.Errorf("no message converter found for network num %v", bt.networkNum)
-		}
-	*/
 }

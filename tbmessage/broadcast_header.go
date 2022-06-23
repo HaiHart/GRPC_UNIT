@@ -11,19 +11,19 @@ import (
 // BroadcastHeader represents the shared header of a broadcast message
 type BroadcastHeader struct {
 	Header
-	hash          types.SHA256Hash
-	networkNumber types.NetworkNum
-	sourceID      [SourceIDLen]byte
+	hash       types.SHA256Hash
+	networkNum types.NetworkNum
+	sourceID   [SourceIDLen]byte
 }
 
-// GetNetworkNum gets the message network number
-func (b *BroadcastHeader) GetNetworkNum() types.NetworkNum {
-	return b.networkNumber
+// NetworkNum gets the message network number
+func (b *BroadcastHeader) NetworkNum() types.NetworkNum {
+	return b.networkNum
 }
 
 // SetNetworkNum sets the message network number
 func (b *BroadcastHeader) SetNetworkNum(networkNum types.NetworkNum) {
-	b.networkNumber = networkNum
+	b.networkNum = networkNum
 }
 
 // Hash returns the message hash
@@ -52,7 +52,6 @@ func (b *BroadcastHeader) SetSourceID(sourceID types.NodeID) error {
 	if err != nil {
 		return fmt.Errorf("failed to set source id, source id: %v", sourceIDBytes)
 	}
-
 	copy(b.sourceID[:], sourceIDBytes[:])
 	return nil
 }
@@ -60,10 +59,9 @@ func (b *BroadcastHeader) SetSourceID(sourceID types.NodeID) error {
 // Pack serializes a BroadcastHeader into a buffer for sending on the wire
 func (b *BroadcastHeader) Pack(buf *[]byte, msgType string) {
 	offset := HeaderLen
-
 	copy((*buf)[offset:], b.hash[:])
 	offset += types.SHA256HashLen
-	binary.LittleEndian.PutUint32((*buf)[offset:], uint32(b.networkNumber))
+	binary.LittleEndian.PutUint32((*buf)[offset:], uint32(b.networkNum))
 	offset += types.NetworkNumLen
 	copy((*buf)[offset:], b.sourceID[:])
 	offset += SourceIDLen
@@ -78,11 +76,10 @@ func (b *BroadcastHeader) Unpack(buf []byte) error {
 	if err := checkBufSize(&buf, 0, int(b.Size())); err != nil {
 		return err
 	}
-
 	offset := HeaderLen
 	copy(b.hash[:], buf[HeaderLen:])
 	offset += types.SHA256HashLen
-	b.networkNumber = types.NetworkNum(binary.LittleEndian.Uint32(buf[offset:]))
+	b.networkNum = types.NetworkNum(binary.LittleEndian.Uint32(buf[offset:]))
 	offset += types.NetworkNumLen
 	copy(b.sourceID[:], buf[offset:])
 	return nil

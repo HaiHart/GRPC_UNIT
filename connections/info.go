@@ -32,3 +32,8 @@ func (ci Info) IsGateway() bool {
 func (ci Info) IsBDN() bool {
 	return ci.Capabilities&types.CapabilityBDN != 0
 }
+
+// IsRelay indicates if the connection is a relay type
+func (ci Info) IsRelay() bool {
+	return ci.ConnectionType&utils.RelayTransaction != 0 || ci.ConnectionType&utils.RelayBlock != 0
+}

@@ -41,7 +41,6 @@ func NewServer(parent context.Context, config *network.EthConfig, bridge blockch
 
 	ctx, cancel := context.WithCancel(parent)
 	handler := NewHandler(ctx, bridge, config)
-
 	server := p2p.Server{
 		Config: p2p.Config{
 			PrivateKey:       privateKey,
@@ -67,7 +66,6 @@ func NewServer(parent context.Context, config *network.EthConfig, bridge blockch
 		},
 		DiscV5: nil,
 	}
-
 	s := &Server{
 		Server: &server,
 		cancel: cancel,
@@ -86,14 +84,4 @@ func NewServerWithEthLogger(ctx context.Context, config *network.EthConfig, brid
 func (s *Server) Stop() {
 	s.cancel()
 	s.Server.Stop()
-}
-
-// AddEthLoggerFileHandler registers additional file handler by file path
-func (s *Server) AddEthLoggerFileHandler(path string) error {
-	fileHandler, err := log.FileHandler(path, log.TerminalFormat(false))
-	if err != nil {
-		return err
-	}
-	s.Server.Logger.SetHandler(log.MultiHandler(fileHandler, s.Server.Logger.GetHandler()))
-	return nil
 }
