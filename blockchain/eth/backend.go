@@ -97,16 +97,16 @@ func (h *Handler) Handle(peer *Peer, packet eth.Packet) error {
 		return nil
 	case *eth.TransactionsPacket:
 		return h.processTransactions(peer, *p)
-	//case *eth.PooledTransactionsPacket:
-	//	return h.processTransactions(peer, *p)
+	case *eth.PooledTransactionsPacket:
+		return h.processTransactions(peer, *p)
 	//case *eth.NewPooledTransactionHashesPacket:
 	//	return h.processTransactionHashes(peer, *p)
-	//case *eth.NewBlockPacket:
-	//	return h.processBlock(peer, NewBlockInfo(p.Block, p.TD))
-	//case *eth.NewBlockHashesPacket:
-	//	return h.processBlockAnnouncement(peer, *p)
-	//case *eth.BlockHeadersPacket:
-	//	return h.processBlockHeaders(peer, *p)
+	case *eth.NewBlockPacket:
+		return h.processBlock(peer, NewBlockInfo(p.Block, p.TD))
+	case *eth.NewBlockHashesPacket:
+		return h.processBlockAnnouncement(peer, *p)
+	case *eth.BlockHeadersPacket:
+		return h.processBlockHeaders(peer, *p)
 	default:
 		//return fmt.Errorf("unexpected eth packet type: %v", packet)
 	}

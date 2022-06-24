@@ -99,6 +99,8 @@ func (b *TbConn) readLoop() {
 
 		closeReason := "read loop closed"
 		for b.Conn.IsOpen() {
+			// TODO remove this
+			time.Sleep(10 * time.Minute)
 			_, err = b.ReadMessages(b.Handler.ProcessMessage, 30*time.Second, tbmessage.HeaderLen, func(b []byte) int {
 				return int(binary.LittleEndian.Uint32(b[tbmessage.PayloadSizeOffset:]))
 			})

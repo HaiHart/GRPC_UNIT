@@ -29,6 +29,7 @@ type gateway struct {
 	cancel  context.CancelFunc
 
 	bridge          blockchain.Bridge
+	blockProcessor  services.BlockProcessor
 	asyncMsgChannel chan services.MsgInfo
 	blockchainPeers []types.NodeEndpoint
 	clock           utils.Clock
@@ -58,6 +59,7 @@ func NewGateway(parent context.Context, tbConfig *config.TurboConfig, bridge blo
 	assigner := services.NewEmptyTxIDAssigner()
 	txStore := services.NewTbTxStore(3*24*time.Hour, assigner, services.NewHashHistory("seenTxs", 30*time.Minute), timeToAvoidReEntry)
 	g.TxStore = &txStore
+	g.blockProcessor = services.NewRLPBlockProcessor(g.TxStore)
 	return g, nil
 }
 
@@ -161,6 +163,9 @@ func (g *gateway) handleBridgeMessages() error {
 				tx := tbmessage.NewTx(blockchainTx.Hash(), blockchainTx.Content(), 1)
 				g.processTransaction(tx, blockchainConnection)
 			}
+		case blockFromNode := <-g.bridge.ReceiveBlockFromNode():
+			blockchainConnection := connections.NewBlockchainConn(blockFromNode.PeerEndpoint)
+			g.processBlockFromBlockchain(blockFromNode.Block, blockchainConnection)
 		}
 	}
 }
@@ -212,4 +217,9 @@ func (g *gateway) processTransaction(tx *tbmessage.Tx, source connections.Conn) 
 	}
 
 	log.Tracef("msgTx: from %v, hash %v, new Tx %v, new content %v, new TxID %v, sentToBDN: %v, sentToBlockchainNode: %v, handling duration %v, sender %v, networkDuration %v", source, tx.Hash(), txResult.NewTx, txResult.NewContent, txResult.NewTxID, sentToBDN, sentToBlockchainNode, time.Since(startTime), tx.Sender(), networkDuration)
+}
+
+func (g *gateway) processBlockFromBlockchain(tbBlock *types.TbBlock, source connections.Blockchain) {
+	broadcastMessage, _, _ := g.blockProcessor.BxBlockToBroadcast(tbBlock, 0)
+	_ = g.broadcast(broadcastMessage, source, utils.RelayBlock)
 }

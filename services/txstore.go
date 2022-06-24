@@ -8,6 +8,8 @@ import (
 // TxStore is the service interface for transaction storage and processing
 type TxStore interface {
 	Add(hash types.SHA256Hash, content types.TxContent, txID types.TxID, networkNum types.NetworkNum, timestamp time.Time) TransactionResult
+	Get(hash types.SHA256Hash) (*types.TbTransaction, bool)
+	Known(hash types.SHA256Hash) bool
 }
 
 // TransactionResult is returned after the transaction service processes a new tx message, deciding whether to process it

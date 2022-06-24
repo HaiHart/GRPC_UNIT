@@ -24,6 +24,8 @@ type TbTxStore struct {
 	assigner TxIDAssigner
 }
 
+var _ TxStore = (*TbTxStore)(nil)
+
 func NewTbTxStore(maxTxAge time.Duration, assigner TxIDAssigner, seenTxs HashHistory, timeToAvoidReEntry time.Duration) TbTxStore {
 	return TbTxStore{
 		clock:              utils.RealClock{},
@@ -106,4 +108,22 @@ func (t *TbTxStore) refreshSeenTx(hash types.SHA256Hash) bool {
 		return true
 	}
 	return false
+}
+
+// Get returns a single transaction from the transaction service
+func (t *TbTxStore) Get(hash types.SHA256Hash) (*types.TbTransaction, bool) {
+	// reset the timestamp of this hash in the seenTx hashHistory, if it exists in the hashHistory
+	if t.refreshSeenTx(hash) {
+		return nil, false
+	}
+	tx, ok := t.hashToContent.Get(string(hash[:]))
+	if !ok {
+		return nil, ok
+	}
+	return tx.(*types.TbTransaction), ok
+}
+
+// Known returns whether if a tx hash is in seenTx
+func (t *TbTxStore) Known(hash types.SHA256Hash) bool {
+	return t.refreshSeenTx(hash)
 }

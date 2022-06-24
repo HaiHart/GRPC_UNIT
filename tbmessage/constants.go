@@ -25,9 +25,16 @@ const TypeOffset = 4
 // TypeLength is the byte length of the packed message type
 const TypeLength = 12
 
+// EncryptedTypeLen is the byte length of the encrypted byte
+const EncryptedTypeLen = 1
+
+// BroadcastTypeLen is the byte length of the broadcastType byte
+const BroadcastTypeLen = 4
+
 // Message type constants
 const (
-	TxType = "tx"
+	TxType        = "tx"
+	BroadcastType = "broadcast"
 )
 
 // SenderLen is the byte length of sender

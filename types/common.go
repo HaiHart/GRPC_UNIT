@@ -8,6 +8,9 @@ import (
 // UInt32Len is the byte length of unsigned 32bit integers
 const UInt32Len = 4
 
+// UInt64Len is the byte length of unsigned 64bit integers
+const UInt64Len = 8
+
 // NodeEndpoint - represent the node endpoint struct sent in BdnPerformanceStats
 type NodeEndpoint struct {
 	IP        string

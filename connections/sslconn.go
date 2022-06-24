@@ -155,10 +155,10 @@ func (s *SSLConn) Connect() error {
 	s.writer = bufio.NewWriter(s.Socket)
 	s.connectedAt = s.clock.Now()
 
-	s.extensions, err = s.Properties()
-	if err != nil {
-		return err
-	}
+	//s.extensions, err = s.Properties()
+	//if err != nil {
+	//	return err
+	//}
 	s.connectionOpen = true
 
 	s.sendMessages = make(chan tbmessage.Message, s.sendChannelSize)
