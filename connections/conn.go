@@ -44,10 +44,8 @@ const (
 type TbListener interface {
 	HandleMsg(msg tbmessage.Message, conn Conn, background MsgHandlingOptions) error
 	ValidateConnection(conn Conn) error
-
 	// OnConnEstablished is a callback for when a connection has been connected and finished its handshake
 	OnConnEstablished(conn Conn) error
-
 	// OnConnClosed is a callback for when a connection is closed with no expectation of retrying
 	OnConnClosed(conn Conn) error
 }

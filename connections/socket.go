@@ -50,6 +50,11 @@ func NewTLS(ip string, port int, certs *utils.SSLCerts) (*TLS, error) {
 	return &TLS{Conn: tlsClient}, nil
 }
 
+// NewTLSFromConn creates a new TLS wrapper on an existing TLS connection
+func NewTLSFromConn(conn *tls.Conn) *TLS {
+	return &TLS{Conn: conn}
+}
+
 // Properties returns the SSL properties embedded in TLS certificates
 func (t TLS) Properties() (utils.TbSSLProperties, error) {
 	state := t.Conn.ConnectionState()

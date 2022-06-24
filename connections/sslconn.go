@@ -121,11 +121,10 @@ func (s *SSLConn) Info() Info {
 		PeerPort:  s.port,
 		LocalPort: LocalInitiatedPort,
 		// TODO: ConnectionType = s.extensions.NodeType
-		ConnectionType:  utils.RelayTransaction,
-		ConnectionState: "",
-		NetworkNum:      0,
-		FromMe:          s.isInitiator(),
-		ConnectedAt:     s.connectedAt,
+		ConnectionType: utils.Relay,
+		NetworkNum:     0,
+		FromMe:         s.isInitiator(),
+		ConnectedAt:    s.connectedAt,
 	}
 }
 

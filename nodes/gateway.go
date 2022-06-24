@@ -78,8 +78,8 @@ func (g *gateway) Run() error {
 
 	var err error
 
-	privateCertDir := path.Join(g.TbConfig.DataDir)
-	gatewayType := g.TbConfig.NodeType
+	privateCertDir := path.Join(g.Config.DataDir)
+	gatewayType := g.Config.NodeType
 
 	privateCertFile, privateKeyFile := utils.GetCertDir(privateCertDir, strings.ToLower(gatewayType.String()))
 	sslCerts := utils.NewSSLCertsFromFiles(privateCertFile, privateKeyFile)
@@ -116,7 +116,7 @@ func (g *gateway) handleRelayConnections(instructions chan connections.RelayInst
 func (g *gateway) connectRelay(instruction connections.RelayInstruction, sslCerts utils.SSLCerts) {
 	relay := handler.NewOutboundRelay(g, &sslCerts, instruction.IP, instruction.Port, "", utils.Relay, utils.RealClock{})
 	var _ = relay.Start()
-	log.Infof("gateway %v (%v) starting, connecting to relay %v:%v", "", g.TbConfig.Environment, instruction.IP, instruction.Port)
+	log.Infof("gateway %v (%v) starting, connecting to relay %v:%v", "", g.Config.Environment, instruction.IP, instruction.Port)
 }
 
 func (g *gateway) broadcast(msg tbmessage.Message, source connections.Conn, to utils.NodeType) types.BroadcastResults {

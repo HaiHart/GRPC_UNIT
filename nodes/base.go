@@ -13,7 +13,7 @@ import (
 // Base is a base handler for nodes
 type Base struct {
 	Abstract
-	TbConfig        *config.TurboConfig
+	Config          *config.TurboConfig
 	ConnectionsLock *sync.RWMutex
 	Connections     connections.ConnList
 	dataDir         string
@@ -21,9 +21,9 @@ type Base struct {
 }
 
 // NewBase initializes a generic Base
-func NewBase(tbConfig *config.TurboConfig, dataDir string) Base {
+func NewBase(config *config.TurboConfig, dataDir string) Base {
 	return Base{
-		TbConfig:        tbConfig,
+		Config:          config,
 		Connections:     make(connections.ConnList, 0),
 		ConnectionsLock: &sync.RWMutex{},
 		dataDir:         dataDir,
@@ -43,7 +43,7 @@ func (b *Base) OnConnEstablished(conn connections.Conn) error {
 }
 
 // ValidateConnection - validates connection
-func (b *Base) ValidateConnection(conn connections.Conn) error {
+func (b *Base) ValidateConnection(_ connections.Conn) error {
 	return nil
 }
 

@@ -27,20 +27,21 @@ type TbConn struct {
 	closed                bool
 	nodeID                types.NodeID
 	peerID                types.NodeID
-	accountID             types.AccountID
 	connectionType        utils.NodeType
+	localPort             int64
 	log                   *log.Entry
 	clock                 utils.Clock
 	connectedAt           time.Time
 }
 
 // NewTbConn constructs a connection to a turbo node
-func NewTbConn(node connections.TbListener, connect func() (connections.Socket, error), handler connections.ConnHandler, sslCerts *utils.SSLCerts, ip string, port int64, nodeID types.NodeID, connectionType utils.NodeType, logMessages bool, clock utils.Clock) *TbConn {
+func NewTbConn(node connections.TbListener, connect func() (connections.Socket, error), handler connections.ConnHandler, sslCerts *utils.SSLCerts, ip string, port int64, nodeID types.NodeID, connectionType utils.NodeType, logMessages bool, localPort int64, clock utils.Clock) *TbConn {
 	tc := &TbConn{
-		Conn:    connections.NewSSLConnection(connect, sslCerts, ip, port, logMessages, 100000, clock),
-		Node:    node,
-		Handler: handler,
-		nodeID:  nodeID,
+		Conn:      connections.NewSSLConnection(connect, sslCerts, ip, port, logMessages, 100000, clock),
+		Node:      node,
+		Handler:   handler,
+		nodeID:    nodeID,
+		localPort: localPort,
 		log: log.WithFields(log.Fields{
 			"connType":   connectionType.String(),
 			"remoteAddr": "<connecting>",
@@ -81,7 +82,6 @@ func (b *TbConn) readLoop() {
 		err := b.Connect()
 		if err != nil {
 			b.Log().Errorf("encountered connection error while connecting: %v", err)
-
 			reason := "could not connect to remote"
 			if !isInitiator {
 				_ = b.Close(reason)

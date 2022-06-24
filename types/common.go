@@ -37,9 +37,6 @@ type TxIDsByNetwork map[NetworkNum]TxIDList
 // NodeID represents a node's assigned ID. This field is a UUID.
 type NodeID string
 
-// AccountID represents a user's BDN account. This field is a UUID.
-type AccountID string
-
 // Sender represents sender type
 type Sender [20]byte
 

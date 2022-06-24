@@ -1,49 +1,35 @@
 package main
 
 import (
-	"bufio"
-	"crypto/tls"
+	"github.com/massbitprotocol/turbo/nodes"
+	"github.com/urfave/cli/v2"
 	"log"
-	"net"
+	"os"
 )
 
 func main() {
-	log.SetFlags(log.Lshortfile)
-
-	cer, err := tls.LoadX509KeyPair("datadir/gateway/private/gateway_cert.pem", "datadir/gateway/private/gateway_key.pem")
-	if err != nil {
-		log.Println(err)
-		return
+	app := &cli.App{
+		Name:   "gateway",
+		Usage:  "run a Turbo relay",
+		Flags:  []cli.Flag{},
+		Action: runRelay,
 	}
-
-	config := &tls.Config{Certificates: []tls.Certificate{cer}}
-	ln, err := tls.Listen("tcp", ":443", config)
+	err := app.Run(os.Args)
 	if err != nil {
-		log.Println(err)
-		return
-	}
-	defer ln.Close()
-
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-		go handleConnection(conn)
+		log.Fatal(err)
 	}
 }
 
-func handleConnection(conn net.Conn) {
-	defer conn.Close()
-	r := bufio.NewReader(conn)
-	for {
-		msg, err := r.ReadString('\n')
-		if err != nil {
-			log.Println(err)
-			return
-		}
-
-		println(msg)
+func runRelay(c *cli.Context) error {
+	relay, err := nodes.NewRelay()
+	if err != nil {
+		return err
 	}
+	go func() {
+		err = relay.Run()
+		if err != nil {
+
+		}
+	}()
+	return nil
 }

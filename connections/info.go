@@ -8,19 +8,17 @@ import (
 
 // Info represents various information fields about the connection.
 type Info struct {
-	NodeID          types.NodeID
-	AccountID       types.AccountID
-	PeerIP          string
-	PeerPort        int64
-	PeerEnode       string
-	LocalPort       int64 // either the local listening server port, or 0 for outbound connections
-	ConnectionType  utils.NodeType
-	ConnectionState string
-	NetworkNum      types.NetworkNum
-	FromMe          bool
-	Capabilities    types.CapabilityFlags
-	Version         string
-	ConnectedAt     time.Time
+	NodeID         types.NodeID
+	PeerIP         string
+	PeerPort       int64
+	PeerEnode      string
+	LocalPort      int64 // either the local listening server port, or 0 for outbound connections
+	ConnectionType utils.NodeType
+	NetworkNum     types.NetworkNum
+	FromMe         bool
+	Capabilities   types.CapabilityFlags
+	Version        string
+	ConnectedAt    time.Time
 }
 
 // IsGateway indicates if the connection is a gateway
