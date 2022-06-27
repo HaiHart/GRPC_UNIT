@@ -64,23 +64,7 @@ type ethTxJSON struct {
 	GasTipCap *EthBigInt `json:"maxPriorityFeePerGas,omitempty"`
 }
 
-// EmptyFilteredTransactionMap - is an empty filtered transaction map use for evaluating filters
-var EmptyFilteredTransactionMap = map[string]interface{}{
-	"from":                     "0x0",
-	"gas_price":                float64(0),
-	"gas":                      float64(0),
-	"tx_hash":                  "0x0",
-	"input":                    "0x0",
-	"method_id":                "0x0",
-	"value":                    float64(0),
-	"to":                       "0x0",
-	"type":                     "0",
-	"chain_id":                 float64(0),
-	"max_fee_per_gas":          float64(0),
-	"max_priority_fee_per_gas": float64(0),
-}
-
-// NewEthTransaction converts a canonic Ethereum transaction to EthTransaction
+// NewEthTransaction converts a canonical Ethereum transaction to EthTransaction
 func NewEthTransaction(h SHA256Hash, rawEthTx *ethtypes.Transaction, extractSender bool) (*EthTransaction, error) {
 	var (
 		sender common.Address

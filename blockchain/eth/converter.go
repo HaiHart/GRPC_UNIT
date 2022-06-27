@@ -94,36 +94,3 @@ func (c Converter) BlockBDNtoBlockchain(block *types.TbBlock) (interface{}, erro
 	}
 	return NewBlockInfo(&ethBlock, block.TotalDifficulty), nil
 }
-
-// TbBlockToCanonicFormat converts a block from BDN format to BlockNotification format
-func (c Converter) TbBlockToCanonicFormat(TbBlock *types.TbBlock) (*types.BlockNotification, error) {
-	result, err := c.BlockBDNtoBlockchain(TbBlock)
-	if err != nil {
-		return nil, err
-	}
-	ethBlock := result.(*BlockInfo).Block
-	TbBlock.SetSize(int(ethBlock.Size()))
-
-	ethTxs := make([]types.EthTransaction, 0, len(ethBlock.Transactions()))
-	for _, tx := range ethBlock.Transactions() {
-		var ethTx *types.EthTransaction
-		txHash := NewSHA256Hash(tx.Hash())
-		ethTx, err = types.NewEthTransaction(txHash, tx, true)
-		if err != nil {
-			return nil, err
-		}
-		ethTxs = append(ethTxs, *ethTx)
-	}
-	ethUncles := make([]types.Header, 0, len(ethBlock.Uncles()))
-	for _, uncle := range ethBlock.Uncles() {
-		ethUncle := types.ConvertEthHeaderToBlockNotificationHeader(uncle)
-		ethUncles = append(ethUncles, *ethUncle)
-	}
-	blockNotification := types.BlockNotification{
-		BlockHash:    ethBlock.Hash(),
-		Header:       types.ConvertEthHeaderToBlockNotificationHeader(ethBlock.Header()),
-		Transactions: ethTxs,
-		Uncles:       ethUncles,
-	}
-	return &blockNotification, nil
-}

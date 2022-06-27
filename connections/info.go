@@ -16,7 +16,6 @@ type Info struct {
 	ConnectionType utils.NodeType
 	NetworkNum     types.NetworkNum
 	FromMe         bool
-	Capabilities   types.CapabilityFlags
 	Version        string
 	ConnectedAt    time.Time
 }
@@ -24,11 +23,6 @@ type Info struct {
 // IsGateway indicates if the connection is a gateway
 func (ci Info) IsGateway() bool {
 	return ci.ConnectionType&utils.Gateway != 0
-}
-
-// IsBDN indicates if the connection is a BDN gateway
-func (ci Info) IsBDN() bool {
-	return ci.Capabilities&types.CapabilityBDN != 0
 }
 
 // IsRelay indicates if the connection is a relay type

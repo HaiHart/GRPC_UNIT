@@ -25,28 +25,24 @@ const (
 
 type gateway struct {
 	Base
-	context context.Context
-	cancel  context.CancelFunc
-
+	context         context.Context
+	cancel          context.CancelFunc
 	bridge          blockchain.Bridge
-	blockProcessor  services.BlockProcessor
 	asyncMsgChannel chan services.MsgInfo
+	blockProcessor  services.BlockProcessor
 	blockchainPeers []types.NodeEndpoint
 	clock           utils.Clock
 	timeStarted     time.Time
-
-	gatewayPeers string
+	gatewayPeers    string
 }
 
 var _ connections.TbListener = (*gateway)(nil)
 
-func NewGateway(parent context.Context, tbConfig *config.TurboConfig, bridge blockchain.Bridge,
-	blockchainPeers []types.NodeEndpoint, peersInfo []network.PeerInfo) (Node, error) {
+func NewGateway(parent context.Context, config *config.TurboConfig, bridge blockchain.Bridge, blockchainPeers []types.NodeEndpoint, peersInfo []network.PeerInfo) (Node, error) {
 	ctx, cancel := context.WithCancel(parent)
 	clock := utils.RealClock{}
-
 	g := &gateway{
-		Base:            NewBase(tbConfig, "datadir"),
+		Base:            NewBase(config, "datadir"),
 		bridge:          bridge,
 		context:         ctx,
 		cancel:          cancel,
@@ -57,7 +53,7 @@ func NewGateway(parent context.Context, tbConfig *config.TurboConfig, bridge blo
 	}
 	g.asyncMsgChannel = services.NewAsyncMsgChannel(g)
 	assigner := services.NewEmptyTxIDAssigner()
-	txStore := services.NewTbTxStore(3*24*time.Hour, assigner, services.NewHashHistory("seenTxs", 30*time.Minute), timeToAvoidReEntry)
+	txStore := services.NewTbTxStore(30*time.Minute, 3*24*time.Hour, 10*time.Minute, assigner, services.NewHashHistory("seenTxs", 30*time.Minute), nil, timeToAvoidReEntry)
 	g.TxStore = &txStore
 	g.blockProcessor = services.NewRLPBlockProcessor(g.TxStore)
 	return g, nil
@@ -88,6 +84,7 @@ func (g *gateway) Run() error {
 
 	var group errgroup.Group
 	group.Go(g.handleBridgeMessages)
+	group.Go(g.TxStore.Start)
 
 	relayInstructions := make(chan connections.RelayInstruction)
 	go g.handleRelayConnections(relayInstructions, sslCerts)
@@ -125,7 +122,6 @@ func (g *gateway) broadcast(msg tbmessage.Message, source connections.Conn, to u
 	g.ConnectionsLock.RLock()
 	defer g.ConnectionsLock.RUnlock()
 	results := types.BroadcastResults{}
-
 	for _, conn := range g.Connections {
 		// if connection type is not in target - skip
 		if conn.Info().ConnectionType&to == 0 {

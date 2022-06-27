@@ -50,8 +50,8 @@ func (bt *TbTransaction) HasContent() bool {
 	return len(bt.content) > 0
 }
 
-// ShortIDs returns the (possibly multiple) short IDs assigned to a transaction
-func (bt *TbTransaction) ShortIDs() TxIDList {
+// TxIDs returns the (possibly multiple) IDs assigned to a transaction
+func (bt *TbTransaction) TxIDs() TxIDList {
 	return bt.txIDs
 }
 

@@ -52,7 +52,6 @@ type Converter interface {
 	TransactionBDNToBlockchain(*types.TbTransaction) (interface{}, error)
 	BlockBlockchainToBDN(interface{}) (*types.TbBlock, error)
 	BlockBDNtoBlockchain(block *types.TbBlock) (interface{}, error)
-	TbBlockToCanonicFormat(*types.TbBlock) (*types.BlockNotification, error)
 }
 
 // Bridge represents the application interface over which messages are passed between the blockchain node and the BDN

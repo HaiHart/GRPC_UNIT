@@ -34,8 +34,8 @@ func NewBase(config *config.TurboConfig, dataDir string) Base {
 // OnConnEstablished - a callback function called when new connection is established
 func (b *Base) OnConnEstablished(conn connections.Conn) error {
 	connInfo := conn.Info()
-	conn.Log().Infof("connection established, gateway: %v, bdn: %v protocol version %v, network %v, on local port %v",
-		connInfo.IsGateway(), connInfo.IsBDN(), connInfo.NetworkNum, conn.Info().LocalPort)
+	conn.Log().Infof("connection established, gateway: %v, protocol version %v, network %v, on local port %v",
+		connInfo.IsGateway(), connInfo.NetworkNum, conn.Info().LocalPort)
 	b.ConnectionsLock.Lock()
 	defer b.ConnectionsLock.Unlock()
 	b.Connections = append(b.Connections, conn)
