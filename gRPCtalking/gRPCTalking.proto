@@ -1,0 +1,18 @@
+syntax ="proto3";
+
+option go_package="github.com/HaiHart/GRPC_UNIT/gRPCTalking";
+
+package gRPCTalking;
+
+service gateWay{
+	rpc sendBlock(Block)returns (Response);
+	rpc sendBlocks( stream Block) returns (Response);
+}
+
+message Block{
+
+}
+
+message Response{
+	
+}
